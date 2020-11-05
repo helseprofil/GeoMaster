@@ -7,6 +7,11 @@
 	
 ***		MÅ FØLGES OPP:
 ***		"Fauske Fuossko" er riktig likevel - rette opp (ble feil i fjor). ok
+***		Samiske navn vi ikke har snappet opp!
+***		- Dielddanuorri – Tjeldsund .ok
+***		- Hammerfest – Hámmerfeasta .ok
+***		- Namsos – Nåavmesjenjaelmie .ok
+
 
 ***		Obs om Bydeler i Stavanger:
 ***		Eiganes og Våland får fjernet "kommunedel" fra den filen som brukes i flatfilproduksjon
@@ -26,6 +31,7 @@
 	FASIT for kommunenummer og -navn per 22.9.2020 (NB: HAR NOEN UFULLSTENDIGE NAVN): 
 		F:\Prosjekter\Kommunehelsa\Masterfiler\2021\Kommuneliste_fra_KLASS_per_2020-09-22.csv
 		Lastet ned fra SSB/KLASS.
+	MÅ OPPDATERES - MANGE ENDRINGER SENERE PÅ HØSTEN.
 
 	Oversikt over endringer fra tidligere år:
 	* for 2014-profilene: * ingenting *	
@@ -99,6 +105,9 @@ use "../`fjoraar'/Stedsnavn_SSB_Unicode.dta", clear
 * RETTELSER
 replace Sted = subinstr(Sted,"Fuosko","Fuossko",1)	//KMD har det riktig! 
 													//Stedet heter Fuossko, mens kommunenavnet er Fuosko suokhan.
+replace Sted = "Dielddanuorri Tjeldsund" if strmatch(Sted, "Tjeldsund")
+replace Sted = "Hammerfest Hámmerfeasta" if strmatch(Sted, "Hammerfest")
+replace Sted = "Namsos Nåavmesjenjaelmie" if strmatch(Sted, "Namsos")
 
 *Avslutning:
 * SPES: Eiganes og Våland blir for langt, lager femsiders profiler.
@@ -107,7 +116,7 @@ replace Sted = subinstr(Sted, " kommunedel", "",.) if Sted_kode == "110303"
 
 sort Sted_kode
 notes drop _dta
-note: Oppdatert `: di %tdCYND date(c(current_date),"DMY")' av skriptet som  hvert fall opprinnelig het Oppdatere_master-GEO...
+note: Oppdatert `: di %tdCYND date(c(current_date),"DMY")' av skriptet som i hvert fall opprinnelig het Oppdatere_master-GEO...
 label data "Sjekk notes"
 save "Stedsnavn_SSB_Unicode.dta", replace
 
@@ -182,6 +191,10 @@ restore
 	replace Sted = "Lavangen"	if strmatch(Sted, "*Lavangen")
 	replace Sted = "Nordreisa" 	if strmatch(Sted, "Nordreisa*")
 	replace Sted = "Hattfjelldal" 	if strmatch(Sted, "*Hattfjelldal")
+	replace Sted = "Tjeldsund" 	if strmatch(Sted, "*Tjeldsund")
+	replace Sted = "Hammerfest" if strmatch(Sted, "Hammerfest*")
+	replace Sted = "Namsos" 	if strmatch(Sted, "Namsos*")
+
 *exit
 	save `mellomlager', replace
 
