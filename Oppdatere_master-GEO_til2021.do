@@ -66,7 +66,7 @@ set more off
 pause on
 
 *LEGG INN RETT ÅRSTALL!
-cd "F:\Prosjekter\Kommunehelsa\Masterfiler\2021"
+cd "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler\2021"
 
 ************************************************************************
 *  TEST på at det er lagt inn rett årstall i filbanen. Vanligvis vil dette 
