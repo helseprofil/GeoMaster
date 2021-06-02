@@ -52,6 +52,7 @@
 		Nye fylker: Hardkoder. Bydeler: nye i Stavanger. Helseregioner nye numre.
 		MIDLERTIDIG (håper jeg): Luke vekk bokstav "eng" fra Porsáŋki. Den blir spm.tegn et sted på veien 
 		fra Indikator.txt til profil.
+	* For OVP-2021: Lage egen versjon av RegionMaster, der fylkene er tatt ut (det lages ikke fylkesprofiler ennå)
 	*/
 
 /*	
@@ -127,23 +128,27 @@ replace Sted = "Eiganes og Våland kommunedel" if Sted_kode == "110303"
 * Lagres som Unicode-txt-fil. Den lastes opp på SQL-Server hos SIIT,
 * for oppdatering av Regiontabellen i utvalgsmekanismen på khp.fhi.no.
 * Her må Hreg tas ut...
+* Egen versjon for Oppvekstprofiler, uten fylkene.
 **************************************************************************************
 
 preserve
 	gen HarBydel =.
 	replace HarBydel =1 if (geo==301 | geo==1103 | geo==4601 | geo==5001 )
 	gen Aar=`profilaar'
-	gen RegiontypeId="KOMMUNE" if length(Sted_kode)==4
-	replace RegiontypeId="FYLKE" if length(Sted_kode)==2 & Sted_kode!="00"
-	replace RegiontypeId="BYDEL" if length(Sted_kode)==6 
+	gen RegiontypeId = "KOMMUNE" if length(Sted_kode)==4
+	replace RegiontypeId = "FYLKE" if length(Sted_kode)==2 & Sted_kode!="00"
+	replace RegiontypeId = "BYDEL" if length(Sted_kode)==6 
 	sort Sted_kode 
-	drop if Sted_kode=="030116" | Sted_kode=="030117"
-	drop if (geo>80 & geo<90)		//Helseregioner
+	drop if Sted_kode == "030116" | Sted_kode == "030117"
+	drop if (geo > 80 & geo < 90)		//Helseregioner
 *pause Inni preserve	
 	keep Sted_kode Aar Sted RegiontypeId HarBydel
 	order Sted_kode Aar Sted RegiontypeId
 	export excel using "Geografiliste_`profilaar'_utenSentrumMarka.xlsx", firstrow(variables) replace
 	export delimited RegionMaster_`profilaar'.txt, delimiter(tab) nolabel replace
+	
+	drop if RegiontypeId == "FYLKE"
+	export delimited RegionMaster_OPPVEKST_`profilaar'.txt, delimiter(tab) nolabel replace
 restore
 
 *exit
