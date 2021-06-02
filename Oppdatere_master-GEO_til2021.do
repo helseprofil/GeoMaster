@@ -222,4 +222,4 @@ restore
 	note: er lagt som value labels på numerisk Geo.
 	note: Til bruk særlig i grafer.
 	save "Stedsnavn_SSB_TIL_GRAFER_Unicode.dta", replace
-		
+	export delimited "Stedsnavn_SSB_TIL_GRAFER_Unicode.csv", delimiter(";") nolabel replace
