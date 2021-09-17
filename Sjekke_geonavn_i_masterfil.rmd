@@ -14,40 +14,75 @@ på fylker/kommuner/bydeler, som ikke ligger i vår nåværende "Stedsnavn_SSB_U
 knitr::opts_chunk$set(echo = TRUE)
 
 library(norgeo)
+library(haven)
 library(tidyverse)
 ```
 
-## R Markdown
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-# summary(cars)
+```{r parametre}
+aar <- 2021
+root <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Masterfiler"
+masterfil <- "Stedsnavn_SSB_Unicode.dta"
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-# plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
-
-
-
-```{r }
-### OBS: Function read_csv finnes i både norgeo og readr/tidyverse.
-#   Vær eksplisitt (::) ved evt. bruk av den.
-
+```{r API-kall}
 # Samle inn oppdaterte lister fra SSB
 data <- get_code(type = "fylke")        # kan bare ta ett geonivå om gangen.
 data_k <- get_code(type = "kommune")
 data_b <- get_code(type = "bydel")
 
+```
+
+```{r wrangling}
+### OBS: Function read_csv finnes i både norgeo og readr/tidyverse.
+#   Vær eksplisitt (::) ved evt. bruk av den.
+
+
 data_alle <- bind_rows(data, data_k, data_b)    # samlet i én tabell
 
 # Les inn fjorårets masterfil
+oldmaster <- haven::read_dta(paste(root, aar, masterfil, sep = "/"))
+
+# Merge/join de to og se etter forskjeller i navnene. Må rydde litt først.
+    # - fjerne helseregioner
+    # - fjerne "bydel" fra navnene
+    # - samordne variabelnavn før merge (det er egentlig ikke nødvendig)
+
+old <- oldmaster %>% 
+        filter(geo < 81 | geo > 84) %>%
+        mutate(Sted = stringr::str_replace(Sted, "Bydel ", "")) %>%
+        mutate(Sted = stringr::str_replace(Sted, " bydel", "")) %>%
+        mutate(Sted = stringr::str_replace(Sted, " kommunedel", "")) %>%
+        rename(name = Sted)
+
+
+        # Må bli kvitt "99"-koder fra KLASS-dataene.
+        # Hvordan filtrere fram de radene der "code: siste to tegn ikke er 99"?
+        # grep() er pattern matching med regexp.
+        # value = TRUE gir selve verdiene ut, ikke deres indexer.
+        # invert = TRUE finner de som IKKE matchet.
+        # "99" er søketeksten. $ er "slutten av linja". Må ikke bruke [], for da tar den ALLE 9-tall.
+
+        # new <- grep("99$", data_alle$code, value = TRUE, invert = TRUE)
+
+        # Men filter() krever altså verdi TRUE, ikke geokodene. Det får jeg med grepl().
+        # Da blir parameter "value" overflødig, og "invert" markeres med ! i stedet.
+        # Ut kommer en vector med "FALSE" for alle treff på "99", og "TRUE" på alt annet.
+
+        # new <- !grepl("99$", data_alle$code)
+
+        # Og litt overraskende: filter() skjønte hva jeg ville ha, selv uten å 
+        # oppgi variabel "code" direkte:
+
+    # - fjerne bindestrek mellom språkversjonene
+
+new <- data_alle %>% 
+    filter(!grepl("99$", data_alle$code)) %>%
+    mutate(name = str_replace_all(name, "- ", ""))
+
+# Da kan jeg merge:
+# Merger på navn, så blir det kjapt å finne mismatch - der det er NA i de andre vars.
+smlikn <- full_join(old, new, by = "name") %>%
+    arrange(name)
 
 ```
