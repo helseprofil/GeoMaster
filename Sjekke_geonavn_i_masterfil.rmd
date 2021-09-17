@@ -1,0 +1,53 @@
+---
+title: "Sjekke_geonavn_i_masterfil"
+author: "Steinar Bjørnæs"
+date: "16 9 2021"
+output: html_document
+---
+
+Verktøy: Se om det i SSBs nåværende Geo-tabeller i KLASS har kommet inn nye navn
+på fylker/kommuner/bydeler, som ikke ligger i vår nåværende "Stedsnavn_SSB_Unicode".
+
+
+```{r setup, include=FALSE}
+# Chunk automatisk lagt inn av RStudio, men utvidet av meg
+knitr::opts_chunk$set(echo = TRUE)
+
+library(norgeo)
+library(tidyverse)
+```
+
+## R Markdown
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+# summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+# plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+```{r }
+### OBS: Function read_csv finnes i både norgeo og readr/tidyverse.
+#   Vær eksplisitt (::) ved evt. bruk av den.
+
+# Samle inn oppdaterte lister fra SSB
+data <- get_code(type = "fylke")        # kan bare ta ett geonivå om gangen.
+data_k <- get_code(type = "kommune")
+data_b <- get_code(type = "bydel")
+
+data_alle <- bind_rows(data, data_k, data_b)    # samlet i én tabell
+
+# Les inn fjorårets masterfil
+
+```

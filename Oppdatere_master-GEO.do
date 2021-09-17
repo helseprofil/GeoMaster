@@ -1,18 +1,12 @@
 /*  Verktøyscript:
 	OPPDATERE GEO-MASTERFIL FRA  ETT ÅR TIL NESTE 
 
-*** KMD svarer i mail at de ikke kjenner til noen endringer i geo-inndelingen for 2021.
+*** KMD svarer i mail at de ikke kjenner til noen endringer i geo-inndelingen for 2022.
+	Men de kjenner ikke planene for bydeler. 
+	
 	Scriptet kopierer masterfil fra 2020, og retter navn etc.
 	
 	
-***		MÅ FØLGES OPP:
-***		"Fauske Fuossko" er riktig likevel - rette opp (ble feil i fjor). ok
-***		Samiske navn vi ikke har snappet opp!
-***		- Dielddanuorri – Tjeldsund .ok
-***		- Hammerfest – Hámmerfeasta .ok
-***		- Namsos – Nåavmesjenjaelmie .ok
-
-
 ***		Obs om Bydeler i Stavanger:
 ***		Eiganes og Våland får fjernet "kommunedel" fra den filen som brukes i flatfilproduksjon
 ***		- ellers blir det femsiders bydelsprofil (2020- ).
@@ -20,7 +14,7 @@
 	Poenget med å scripte er å lettere kunne teste/endre, og å 
 	dokumentere hva vi gjør. Scriptet må nybygges neste år.
 	
-	Scriptnavn: Oppdatere_master-GEO_til2021
+	Scriptnavn: Oppdatere_master-GEO.do - Under Git versjonskontroll (fra sep-21).
 	
 	Lager Excelfil og txt-fil tilrettelagt for ny metode (fra H-2017) for oppdatering av Regiontabell 
 	i khp.fhi.no.
