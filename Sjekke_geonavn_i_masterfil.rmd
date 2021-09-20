@@ -85,4 +85,6 @@ new <- data_alle %>%
 smlikn <- full_join(old, new, by = "name") %>%
     arrange(name)
 
+# Nå kan du bla igjennom en alfabetisk liste.
+
 ```
