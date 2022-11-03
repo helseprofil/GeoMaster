@@ -1,0 +1,120 @@
+---
+title: "Oppdatere GEO-tabellene i KHELSA.mdb"
+author: "Steinar Bjørnæs"
+date: '2022-10-26'
+output: html_document
+---
+
+Det må fremdeles gjøres, for vi har data som ikke er GK-inndelt og ikke skal gjennom RDL.
+
+# Metode:
+For detaljer om Accesstabellene for KHfunctions, se Sharepoint: 
+Folkehelseprofiler/Lukkede/Admin/Flytdiagram/Beskrivelse av oppgaver/Hva og hvor må gjøres ved Geo-endringer.docx
+
+
+## Target:
+
+### Tabell GeoKoder: Alle gyldige koder. 
+ID	     GEO	NAVN	FRA	     TIL	GEOniv	TYP
+3213	0101	Halden	1980	2019	K	    O
+
+- Årstall er styrende for databehandlingen. Første og siste år koden er gyldig.
+- Utgående koder må få årstall TIL == siste år.
+- Nye koder får årstall FRA == første år, TIL == 9999.
+- K og B må ha to rader, en med sekssifret kode og GEOniv == S.
+- Alle gyldige koder må stå her.
+
+
+### Tabell KnrHarm: Alle omkodinger.
+GEO	    GEO_omk	HARMstd
+0101	3001	2020
+
+- Årstall er bare til info, endringer slår inn straks.
+- GEO er den utgåtte koden, GEO_omk er gyldig kode i produksjonsåret.
+- Det er BARE gyldige koder i GEO_omk.
+- Koder som utgår må altså flyttes fra GEO_omk til GEO.
+- Ved sammenslåinger skal ALLE gamle koder i GEO, selv om koden gjenbrukes i GEO_omk.
+
+
+## Kilde
+Bruke de ferdige tabellene fra norgeo-systemet, STYRING/raw_khelse/geo-koder.accdb
+
+### Gyldige koder: tblGeo.
+Den har flg. struktur:
+
+    code	name	               validTo  level	    grunnkrets	kommune	fylke	bydel	batch
+03010101	Sentrum 1  - Rode 1	   2022	    grunnkrets	03010101	0301	03	    030116	19.09.2022
+    0301	Oslo	               2022	    kommune		            0301	03		        19.09.2022
+
+Altså: Komplett mapping fra en underliggende kode og oppover i geonivåene, for alle koder som 
+er gyldige i året "ValidTo". OBS: Kode for hele landet mangler her.
+
+Plukke fra denne tabellen alle "code" i level (L)FKB gyldige i angitt år.
+
+
+
+```{r setup, include=FALSE}
+# Chunk automatisk lagt inn av RStudio, men utvidet av meg
+knitr::opts_chunk$set(echo = TRUE)
+
+library(RODBC)         
+library(orgdata)
+library(haven)
+library(tidyverse)
+library(DBI)
+library(odbc)
+
+```
+
+```{r parametre}
+aar    <- 2022
+DBroot <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/STYRING"
+
+# KH_db  <- "KHELSA.mdb"   #SKARP!
+KH_db <- "VERSJONSARKIV/KHELSA201910030941.mdb"   #For utviklingen: Pre-2020-geo.
+
+GEO_db <- "raw-khelse/geo-koder.accdb"            # Skal ikke skrive til denne.
+
+#drv    <- "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ="
+
+```
+
+Koble til og lese fra kildetabellen:
+Klarte ikke å få DBI-kommandoer til å fungere for tilkobling, så jeg bruker RODBC-kommandoer til å hente ut data.
+SQL-query-teksten må ha tekstfnutter rundt 'aar', for aar er tekst i databasen ("ulike datatyper i uttrykket"). Om jeg hadde definert aar <- 2022  eller  aar <- "2022"  gjorde ingen forskjell.
+Jeg leser inn alle gyldige koder, og filtrerer vekk ting etterpå.
+    For 2022, 2023: 356 K + 11 F + 38 B (inkl Sentrum/Marka), + Uoppgitt: (1+11)K + 1F + 4B = 422 koder.
+
+```{r connection}
+# Opprette forbindelse, "channel" i RODBC
+kilde <- RODBC::odbcConnectAccess2007(paste(DBroot, GEO_db, sep = "/"))
+target <- RODBC::odbcConnectAccess2007(paste(DBroot, KH_db, sep = "/"))
+```
+
+```{r}
+# Hente data
+DATA <- RODBC::sqlQuery(kilde, paste("SELECT * FROM tblGeo WHERE validTo = ", "\'", aar, "\'", sep = ""))
+old_GeoKoder <- sqlQuery(target, paste("SELECT * FROM GeoKoder"))
+
+# Filtrere fram gyldige koder som må ligge i target-tabellen
+newtab <- DATA %>% 
+    filter(level != "grunnkrets")
+
+# Finne hvilke koder som må legges til (som ikke er inne fra før)
+newtab <- dplyr::anti_join(newtab, old_GeoKoder, by = c("code" = "GEO"))
+    
+
+```
+
+
+
+
+
+
+
+
+
+
+
+### Omkodinger: kommune<åååå> etc.
+(...)
