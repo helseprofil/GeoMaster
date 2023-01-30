@@ -19,7 +19,7 @@ library(tidyverse)
 ```
 
 ```{r parametre}
-aar <- 2021
+aar <- 2023
 root <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/Masterfiler"
 masterfil <- "Stedsnavn_SSB_Unicode.dta"
 ```
