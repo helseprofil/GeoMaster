@@ -55,7 +55,8 @@
 		(porsanger med Eng - lukes ut pga trøbbel på vei til profilene)
 		(Troms og Finnmark - Romsa ja Finnmárku - Tromssa ja Fi... - Blir for langt! DROPPER.)
 		Trøndelag - Trööndelage
-		
+	* For 2023:
+	  - Nye samiske navn: Trondheim Tråanten, Røros Rossen
 		
 	*/
 
@@ -71,7 +72,7 @@ set more off
 pause on
 
 *LEGG INN RETT ÅRSTALL!
-local profilaar "2022"
+local profilaar "2023"
 
 * KJØRING:
 ************************************************************************
@@ -81,11 +82,10 @@ local profilaar "2022"
 ************************************************************************
 local aarstalliFilbanen = `profilaar' //real(`profilaar')
 local innevaerendeAar = real(word("`c(current_date)'", 3))
-assert `aarstalliFilbanen'==`innevaerendeAar' + 1 
+assert `aarstalliFilbanen'==`innevaerendeAar' // + 1 
 
 local fjoraar  =  `profilaar'-1
 di `fjoraar'
-
 * Sikre at mappestrukturen eksisterer
 capture mkdir "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler/`profilaar'"
 cd "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler/`profilaar'"
@@ -97,7 +97,7 @@ cd "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler/`profil
 *** BØR ERSTATTES MED NORGEO-DATA, dvs. bruke R-kommandoer.
 *** Og da må det legges inn Git-kommandoer først, for å sikre at R jobber i riktig versjon.
 
-	import delimited "Kommuneliste_fra_KLASS_per_2021-09-20.csv", clear
+	import delimited "Kommuneliste_fra_KLASS_per_2023-01-30.csv", clear
 	sort code			//Er kommunenummer
 	rename code geo
 	merge 1:1 geo using "../`fjoraar'/Stedsnavn_SSB_Unicode.dta"	//fjorårets
@@ -106,8 +106,8 @@ cd "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler/`profil
 	gen diff = ""
 	replace diff = "***" if name != Sted & length(Sted_kode) == 4
 			* Funn: 
-			* tegnsettproblemer med 5436 Porsanger og 5437 Karasjok fra KLASS,
-			* og med 1853 Evenes. 
+			* tegnsettproblemer med 5437 Karasjok fra KLASS, og med 1853 Evenes. 
+			* Nye samiske navn TRD, Røros
 	exit
 *-------------------------------------------------*/
 
@@ -121,6 +121,8 @@ replace Sted = "Evenes Evenášši" if strmatch(Sted, "Evenes")
 replace Sted = "Hábmer Hamarøy" if strmatch(Sted, "Hamarøy*")
 replace Sted = "Nordland Nordlánnda" if strmatch(Sted, "Nordland")
 replace Sted = "Trøndelag Trööndelage" if strmatch(Sted, "Trøndelag")
+replace Sted = "Trondheim Tråanten" if strmatch(Sted, "Trondheim")
+replace Sted = "Røros Rossen" if strmatch(Sted, "Røros")
 
 ********************************************************************************
 * AVSLUTNING - LAGRE RESULTATFILER
@@ -188,7 +190,7 @@ restore
 
 	//Fylkesangivelser kommer i parentes. Let etter "navn<space>startparentes"
 	replace Sted = regexs(1) ///
-		if regexm(Sted, "([a-zA-Z0-9æøåÆØÅ]+)([ ][\(])")
+		if regexm(Sted, "([a-zA-Z0-9æøöåÆØÅ]+)([ ][\(])")
 	
 	//Fjerne "bydel"
 	replace Sted = subinstr(Sted, "Bydel ", "", .)
@@ -211,12 +213,14 @@ restore
 	replace Sted = "Nordland" 	if strmatch(Sted, "Nordland*")
 	replace Sted = "Nordreisa" 	if strmatch(Sted, "Nordreisa*")
 	replace Sted = "Porsanger"	if strmatch(Sted, "Porsanger*")
+	replace Sted = "Røros"		if strmatch(Sted, "Røros*")
 	replace Sted = "Røyrvik"	if strmatch(Sted, "*Røyrvik")
 	replace Sted = "Snåsa"		if strmatch(Sted, "Snåase*")
 	replace Sted = "Sortland"	if strmatch(Sted, "Sortland*")
 	replace Sted = "Storfjord"	if strmatch(Sted, "*Storfjord*")
 	replace Sted = "Tana"		if strmatch(Sted, "Deatnu*")
 	replace Sted = "Tjeldsund" 	if strmatch(Sted, "*Tjeldsund")
+	replace Sted = "Trondheim" 	if strmatch(Sted, "Trondheim*")
 	replace Sted = "Trøndelag" 	if strmatch(Sted, "Trøndelag*")
 
 *exit
