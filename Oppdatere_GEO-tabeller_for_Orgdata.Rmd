@@ -22,6 +22,8 @@ library(orgdata)
 Dette lager årgangstabellene, f.eks. grunnkrets2022, kommune2022, fylke2022.
 Alle SSBs endringstabeller for grunnkrets leses inn og stables. Så ryddes vekk alle år uten endringer. Alle gamle koder mappes helt til gyldig kode i 2022.
 
+Må visst kjøres eksplisitt for hvert geonivå - g, k, f.
+
 NB: Vi må ta "from" så langt tilbake som vi har data på grunnkrets.
 
 ```{r}
