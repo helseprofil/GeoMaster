@@ -1,0 +1,58 @@
+---
+title: "Oppdatere GEO i Orgdata"
+output: html_document
+date: "2023-08-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Alle {norgeo}-mekanismene er bygget inn i kommandoer i {orgdata}.
+
+```{r}
+library(orgdata)
+
+```
+
+
+#Lage årgangstabellene for det nye året
+
+Dette lager årgangstabellene, f.eks. grunnkrets2022, kommune2022, fylke2022.
+Alle SSBs endringstabeller for grunnkrets leses inn og stables. Så ryddes vekk alle år uten endringer. Alle gamle koder mappes helt til gyldig kode i 2022.
+
+NB: Vi må ta "from" så langt tilbake som vi har data på grunnkrets.
+
+```{r}
+geo_recode("g", from = 1990, to = 2023, write = TRUE)
+
+```
+
+#Lage mapping mellom geonivåene for nyeste år
+
+Dette lager data til tblGEO.
+NB: BRUK APPEND, ellers slettes tidligere årganger i tabellen.
+Da må den gjenskapes ved å kjøre for hvert tidligere år man vil kunne kjøre.
+
+Nå hentes mappingtabellene for angitt år fra SSB.
+GK -> K, GK -> bydel, K -> F.
+
+```{r}
+geo_map(year = 2023, append = TRUE)
+
+```
+
+
+#EVENTUELT: Legge til egne definisjoner.
+
+Kommando: geo_merge
+
+Henter inn tabell med koder som ikke finnes hos SSB API. F.eks. Delbydel i Oslo.
+	id.table   : Hva heter relevant kolonne i tblGeo.
+	id.file    : Hva heter relevant kolonne i inndatafilen.
+	-det vil si, kolonnen med de geokodene man vil merge på.
+	
+Vi må ha en tabell med ferdig mapping mellom geonivåene.
+Om vi har bare f.eks. Delbydel i "til"-kolonnen, blir disse kodene lagt inn i riktig kolonne i tblGeo, sammen med de andre geonivåene for samme "fra"-kode.
+Hvis ikke kolonnen (geonivået) finnes, opprettes den (f.eks. "Levekårssoner").
