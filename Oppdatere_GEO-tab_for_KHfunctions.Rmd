@@ -5,7 +5,7 @@ date: '2022-10-26'
 output: html_document
 ---
 
-Det må fremdeles gjøres, for vi har data som ikke er GK-inndelt og ikke skal gjennom RDL.
+Det må fremdeles gjøres, for vi har data som ikke er GK-inndelt og ikke skal gjennom RDL.Dessuten brukes Geo-tabeller for å filtrere ut ugyldige etc.
 
 # Metode:
 For detaljer om Accesstabellene for KHfunctions, se Sharepoint: 
@@ -17,6 +17,7 @@ Folkehelseprofiler/Lukkede/Admin/Flytdiagram/Beskrivelse av oppgaver/Hva og hvor
 ### Tabell GeoKoder: Alle gyldige koder. 
 ID	     GEO	NAVN	FRA	     TIL	GEOniv	TYP
 3213	0101	Halden	1980	2019	K	    O
+        (GEO er tekst, m. ledende nuller)  (Fra og til er tall)
 
 - Årstall er styrende for databehandlingen. Første og siste år koden er gyldig.
 - Utgående koder må få årstall TIL == siste år.
@@ -64,6 +65,7 @@ library(tidyverse)
 library(DBI)
 library(odbc)
 
+# CAVE: Rekkefølgen gjør at orgdata::read_file() og read_log() blir 'masked' av de tilsvarende readr-funksjonene. Må være eksplisitt om package hvis jeg skal bruke disse funksjonene.
 ```
 
 ```{r parametre}
@@ -91,19 +93,34 @@ kilde <- RODBC::odbcConnectAccess2007(paste(DBroot, GEO_db, sep = "/"))
 target <- RODBC::odbcConnectAccess2007(paste(DBroot, KH_db, sep = "/"))
 ```
 
+# Tabell GeoKoder
 ```{r}
 # Hente data
 DATA <- RODBC::sqlQuery(kilde, paste("SELECT * FROM tblGeo WHERE validTo = ", "\'", aar, "\'", sep = ""))
 old_GeoKoder <- sqlQuery(target, paste("SELECT * FROM GeoKoder"))
 
-# Filtrere fram gyldige koder som må ligge i target-tabellen
+# Filtrere fram gyldige koder som må ligge i target-tabellen GeoKoder
 newtab <- DATA %>% 
     filter(level != "grunnkrets")
 
 # Finne hvilke koder som må legges til (som ikke er inne fra før)
 newtab <- dplyr::anti_join(newtab, old_GeoKoder, by = c("code" = "GEO"))
-    
 
+# Rense tabellen så strukturen matcher target
+newtab <- newtab %>%
+    dplyr::select(-grunnkrets, -kommune, -fylke, -bydel, -batch) %>% #fjerne kolonner
+    dplyr::rename(NAVN = name) %>%                                   #nytt kolonnenavn
+    dplyr::rename(FRA = validTo) %>%                                 #ditto, gyldighet av ny kode starter nå
+    dplyr::mutate(TIL = 9999)                                        #ny kolonne med siste gyldighetsår
+
+# Lage string geokoder
+kladd <- newtab %>%
+    mutate(GEO = as.character(newtab$code))         # Oppretter ny chr-variabel GEO
+    
+    # For 2022-dataene er det ingen Oslo-koder. 
+    # Bør likevel bygges ut med å legge på ledende null hvis 3-5-7-sifret.
+    # Kan bruke tallverdiene i code som styring hvis det er enklere.
+    
 ```
 
 
