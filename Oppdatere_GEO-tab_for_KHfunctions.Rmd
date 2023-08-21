@@ -93,6 +93,18 @@ kilde <- RODBC::odbcConnectAccess2007(paste(DBroot, GEO_db, sep = "/"))
 target <- RODBC::odbcConnectAccess2007(paste(DBroot, KH_db, sep = "/"))
 ```
 
+Testdata: Noen linjer med ulike verdier som input
+```{r, include = FALSE}
+DUMMYDATA <- readr::read_delim("F:\\Forskningsprosjekter\\PDB 2455 - Helseprofiler og til_\\PRODUKSJON\\TMP\\dummydata1.csv", delim = ";", col_types = "c")
+
+kladd <- DUMMYDATA %>%
+    mutate(GEO = dplyr::if_else(stringr::str_length(GEO) %in% c("3", "5", "7"),    #betingelse
+                                paste("0", GEO, sep = ""),                         #hvis True
+                                GEO))                                              #hvis False
+
+```
+
+
 # Tabell GeoKoder
 ```{r}
 # Hente data
@@ -114,12 +126,19 @@ newtab <- newtab %>%
     dplyr::mutate(TIL = 9999)                                        #ny kolonne med siste gyldighetsår
 
 # Lage string geokoder
+    # Legge til ledende null hvis geokoden er 3-5-7-sifret
+newtab <- newtab %>%
+    mutate(GEO = as.character(code)) %>%      # Oppretter ny chr-variabel GEO. Må slette 'code' senere.
+    mutate(GEO = dplyr::if_else(stringr::str_length(GEO) %in% c("3", "5", "7"),    #betingelse
+                                paste("0", GEO, sep = ""),                         #hvis True
+                                GEO))                                              #hvis False
+
+# Kode om fra string geonivå (level) til bokstavkoder (GEOniv)
 kladd <- newtab %>%
-    mutate(GEO = as.character(newtab$code))         # Oppretter ny chr-variabel GEO
-    
-    # For 2022-dataene er det ingen Oslo-koder. 
-    # Bør likevel bygges ut med å legge på ledende null hvis 3-5-7-sifret.
-    # Kan bruke tallverdiene i code som styring hvis det er enklere.
+    mutate(GEOniv = dplyr::case_when(level == "fylke" ~ "F",
+                                     level == "kommune" ~ "K",
+                                     level == "bydel" ~ "B",
+                                     level == "grunnkrets" ~ "G"))
     
 ```
 
