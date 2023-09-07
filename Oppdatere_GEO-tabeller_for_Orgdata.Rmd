@@ -16,6 +16,13 @@ library(orgdata)
 
 ```
 
+#Angi nyeste årgang
+
+```{r parametre}
+aargang <- 2023
+
+```
+
 
 #Lage årgangstabellene for det nye året
 
@@ -27,7 +34,9 @@ Må visst kjøres eksplisitt for hvert geonivå - g, k, f.
 NB: Vi må ta "from" så langt tilbake som vi har data på grunnkrets.
 
 ```{r}
-geo_recode("g", from = 1990, to = 2023, write = TRUE)
+geo_recode("g", from = 1990, to = aargang, write = TRUE)
+geo_recode("k", from = 1990, to = aargang, write = TRUE)
+geo_recode("f", from = 1990, to = aargang, write = TRUE)
 
 ```
 
@@ -39,6 +48,7 @@ Da må den gjenskapes ved å kjøre for hvert tidligere år man vil kunne kjøre
 
 Nå hentes mappingtabellene for angitt år fra SSB.
 GK -> K, GK -> bydel, K -> F.
+Dersom disse ikke finnes, setter systemet selv opp den mappingen som følger av geokodene (dvs. GK -> K -> F).
 
 ```{r}
 geo_map(year = 2023, append = TRUE)
