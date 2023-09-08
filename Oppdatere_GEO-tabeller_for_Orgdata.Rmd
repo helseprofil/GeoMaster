@@ -19,7 +19,7 @@ library(orgdata)
 #Angi nyeste årgang
 
 ```{r parametre}
-aargang <- 2023
+aargang <- 2024
 
 ```
 
@@ -51,7 +51,7 @@ GK -> K, GK -> bydel, K -> F.
 Dersom disse ikke finnes, setter systemet selv opp den mappingen som følger av geokodene (dvs. GK -> K -> F).
 
 ```{r}
-geo_map(year = 2023, append = TRUE)
+geo_map(year = aargang, append = TRUE)
 
 ```
 
