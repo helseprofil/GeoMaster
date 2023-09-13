@@ -178,24 +178,84 @@ newtab <- newtab %>%
 
 ```{r GeoKoder rense gammel tabell}
 # Sette fjorårets årstall som TIL for utgående koder.
-    # For å finne dem: Må lese i tabellene 'kommuneYYYY' og 'fylkeYYYY' for YYYY == <ny geo-årgang> (det finnes ingen 'bydelYYYY').
-    # Filtrere fram bare changeOccurred == YYYY.
-    # I GeoKoder filtrere fram bare gyldige koder (TIL == 9999).
+    # For å finne de utgående kodene: Må lese i 'geo-koder.accdb' (kilden) tabellene 'kommuneYYYY' og 'fylkeYYYY' 
+    # for YYYY == <ny geo-årgang>. 
+    # (det finnes ingen 'bydelYYYY', og jeg trenger ikke å oppdatere grunnkretstabellen i KHELSA).
+    # Filtrere fram bare changeOccurred == YYYY. Det gjøres i sqlQuery'en.
+    # De utgående kodene ligger i oldCode. Må filtrere vekk evt. tomme oldCode, det er koder som ikke ble endret i YYYY.
+    # Blant de utgående, finn om noen er _samme_ kode i currentCode, og filtrer dem vekk. 
+
+    # I KHELSA tab GeoKoder (target) filtrere fram bare gyldige koder (TIL == 9999).
     # De kodene som matcher mellom disse to listene, skal få TIL = YYYY.
 
     # OBS: Det finnes ingen 2020-tabeller i kildefilen GEO_koder.accdb, derfor trikses "2020" til å lese 2021-tabeller.
 
-# Lese inn data og filtrere fram de relevante radene
+tabaar <- dplyr::if_else(aar == 2020,     #betingelse
+                         2021,            #hvis True
+                         aar)             #hvis False
+kommYYYY <- paste("kommune", tabaar, sep = "")
+fylkYYYY <- paste("fylke", tabaar, sep = "")
+    
+# Hente de to kildetabellene som gir utgående koder, og filtrere fram bare endringer i riktig årgang
+    # 'as.is' gjør at alt importeres som string (chr), selv om changeOccurred er num i Access. Dette beskrives i
+    # help-fila for RODBC::sqlQuery.
+kommtab <- RODBC::sqlQuery(kilde, 
+                           paste("SELECT * FROM ", kommYYYY, " WHERE changeOccurred = ", "\'", aar, "\'", sep = ""),
+                           as.is = TRUE)
+fylktab <- RODBC::sqlQuery(kilde, 
+                           paste("SELECT * FROM ", fylkYYYY, " WHERE changeOccurred = ", "\'", aar, "\'", sep = ""),
+                           as.is = TRUE)
+utgaaende <- kommtab %>%
+    dplyr::bind_rows(fylktab) %>%         # Appende de to tabellene
+    dplyr::filter(!is.na(oldCode)) %>%    # Beholde bare rader MED en oldCode. IKKE TESTET, 2021-tabellene har ingen UTEN.
+    dplyr::filter(!(oldCode == currentCode)) # Fjerne evt. rader der oldCode == currentCode. F.eks. "9999" o.l. er slik.
+
+utgaaende_K <- utgaaende %>% filter(stringr::str_length(oldCode) == 4) %>%
+    select(oldCode)
+    
+    # Nå har 'utgaaende' en liste (i oldCode) over alle K- og F-koder i KHELSA som skal få gyldighetsdato satt til fjoråret.
+    # Kommunenummerne er i tillegg skilt ut i egen liste 'utgaaende_K'.
+
+
+# Lese inn gammel tabell
     # Vi har (foreløpig) bare tabeller for Kommune og Fylke (og Grunnkrets) i norgeo-databasen GEO_koder.accdb.
     # KHELSA.mdb har 8-sifrede koder for Delbydel, som er kodet med GEOniv == "G" for å bli akseptert i KHfunctions,
-old_GeoKoder <- sqlQuery(target, paste("SELECT * FROM GeoKoder"), as.is = TRUE)   # Her blir GEO bevart som string
+    # og 6-sifrede Soner, og disse må bevares. Kan ikke filtrere vekk noe, må bare endre i de riktige radene.
+    # Så jeg bruker en flaggvariabel.
 
+old_GeoKoder <- sqlQuery(target, paste("SELECT * FROM GeoKoder"), as.is = TRUE)   # Her blir GEO bevart som string
+fjoraar <- aar - 1
+
+# Flagge de radene som skal endres:
+    # UNDERLIG: Med NA og "x" som flagg-verdier, ble alle TIL-verdier i 'False'-grenen satt til NA (altså slettet) 
+    # i Bytte-årstall-kommandoen nedenfor. Med numerisk flagg ble TIL-verdiene for 'False' bevart, slik de skulle.
 ryddetOld <- old_GeoKoder %>%
-    dplyr::filter(TIL == 9999)
+    dplyr::mutate(flagg = 999) %>%                                      
+    dplyr::mutate(flagg = dplyr::if_else(GEO %in% utgaaende$oldCode,   # Alle utgående koder fra kilde-listene,
+                                         1,
+                                         flagg)) %>%
+    mutate(flagg = if_else((GEOniv %in% c("B", "S") & substr(GEO, 1, 4) %in% utgaaende_K$oldCode), # bydeler og soner med 
+                           1,                                                                      # utgående kommunenummer.
+                           flagg))
+
+# Og så bytte årstall i de flaggede radene:
+ryddetOld <- ryddetOld %>%
+    mutate(TIL = if_else(flagg == 1,
+                         fjoraar,
+                         TIL))
+
+# Rydde, og append av ny input fra chunken ovenfor
+ryddetOld <- ryddetOld %>%
+    select(GEO, NAVN, FRA, TIL, GEOniv, TYP) %>%
+    dplyr::bind_rows(newtab) %>%
+    arrange(GEO, GEOniv)
+
 
 ```
 
-
+Nå skal 'ryddetOld' være klar til å bli skrevet tilbake til Access som tabell GeoKoder.
+- Den gamle tabellen er bevart, bortsett fra at TIL-årstall er endret til fjoråret for alle utgående koder.
+- Nye koder er hektet på.
 
 
 
