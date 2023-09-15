@@ -5,7 +5,8 @@ date: '2022-10-26'
 output: html_document
 ---
 
-Det må fremdeles gjøres, for vi har data som ikke er GK-inndelt og ikke skal gjennom RDL.Dessuten brukes Geo-tabeller for å filtrere ut ugyldige etc.
+Det må fremdeles gjøres, for vi har data som ikke er GK-inndelt og ikke skal gjennom RDL.
+Dessuten brukes Geo-tabeller for å filtrere ut ugyldige etc. i Kubekjøringen
 
 # Metode:
 For detaljer om Accesstabellene for KHfunctions, se Sharepoint: 
@@ -75,13 +76,15 @@ library(odbc)
 ```
 
 ```{r parametre}
-aar    <- 2020                                      #Den nye Geo-årgangen
+aar    <- 2024                                      #Den nye Geo-årgangen
 DBroot <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/STYRING"
 
 # KH_db  <- "KHELSA.mdb"   #SKARP!
-KH_db <- "VERSJONSARKIV/KHELSA201910030941.mdb"     #For utviklingen: Pre-2020-geo.
+# KH_db <- "test/KHELSA2018.mdb"                        #Test: oppdat fra 2018 til 2019 (Rindal!) 
+                                                        #- GÅR IKKE, våre geo-koder starter i 2020.
+KH_db <- "VERSJONSARKIV/KHELSA202012051008.mdb"        # Fersk kopi
 
-GEO_db <- "raw-khelse/geo-koder.accdb"              # Skal ikke skrive til denne.
+GEO_db <- "raw-khelse/geo-koder.accdb"                  # Skal ikke skrive til denne.
 
 
 #drv    <- "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ="
@@ -271,9 +274,13 @@ Men det gikk å skrive til en nyopprettet tabell.
 Jeg prøver derfor å først slette en eventuell tidligere opprettet tabell med samme navn, og så skrive den nye.
 Må følge opp med å endre tabellnavn i Access så den nye blir skarp.
 
+*Dette krever sikkert alenetilgang til databasen.*
+
+
 ```{r hjelpekommandoer, include=FALSE}
 RODBC::sqlTables(target, tableName = "GeoKoder_ny")
 ```
+
 Må først sjekke om tabellen finnes. 
 Hvis ja, slett den. Ble nødt til å bruke base::if(), alt fra dplyr bare kræsjet.
 Så skrive den nye tabellen tilbake.
@@ -283,12 +290,25 @@ Så skrive den nye tabellen tilbake.
 sjekk <- sqlTables(target, tableName = "GeoKoder_ny")   # Lager en data.frame med én rad hvis tabellen finnes, null rader ellers.
 if(length(sjekk$TABLE_NAME) > 0) sqlDrop(target, "GeoKoder_ny")
 
-sqlSave(target, ryddetOld, tablename = "GeoKoder_ny", rownames = TRUE, append = FALSE, safer = TRUE)
+sqlSave(target, ryddetOld, tablename = "GeoKoder_ny", rownames = "ID", append = FALSE, safer = TRUE)
 
 ```
 
 
+Kontroll (hjelperutine)
+For noen av årgangene skal ikke oppdateringen føre til noen endringer ...
 
+```{r kontroll, include=FALSE}
+kontroll <- sqlQuery(target, paste("SELECT * FROM GeoKoder_ny"), as.is = c(2,3,6,7)) # Beholder noen kolonner som string
+
+kontroll <- kontroll %>%
+    dplyr::select(-"ID")            # ID-kolonnen har ulike tall i de to datasettene.
+old_GeoKoder <- old_GeoKoder %>%
+    select(-"ID")
+
+all.equal(kontroll, old_GeoKoder)
+
+```
 
 
 
