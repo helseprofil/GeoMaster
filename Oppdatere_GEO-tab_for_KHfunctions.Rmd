@@ -125,8 +125,16 @@ old_GeoKoder <- sqlQuery(target, paste("SELECT * FROM GeoKoder"))   # Her blir G
 newtab <- DATA %>% 
     filter(level != "grunnkrets")
 
+# Kode om fra string geonivå (level) til bokstavkoder (GEOniv)
+newtab <- newtab %>%
+    mutate(GEOniv = dplyr::case_when(level == "fylke" ~ "F",
+                                     level == "kommune" ~ "K",
+                                     level == "bydel" ~ "B",
+                                     level == "grunnkrets" ~ "G"))
+
 # Finne hvilke koder som må legges til (som ikke er inne fra før)
-newtab <- dplyr::anti_join(newtab, old_GeoKoder, by = c("code" = "GEO"))
+    # Tar med GEOniv i 'by' for å få med kode 54 fra 2019 til 2020. 
+newtab <- dplyr::anti_join(newtab, old_GeoKoder, by = c("code" = "GEO" , "GEOniv") )
 
 # Rense tabellen så strukturen matcher target
 newtab <- newtab %>%
@@ -143,12 +151,6 @@ newtab <- newtab %>%
                                 paste("0", GEO, sep = ""),                         #hvis True
                                 GEO))                                              #hvis False
 
-# Kode om fra string geonivå (level) til bokstavkoder (GEOniv)
-newtab <- newtab %>%
-    mutate(GEOniv = dplyr::case_when(level == "fylke" ~ "F",
-                                     level == "kommune" ~ "K",
-                                     level == "bydel" ~ "B",
-                                     level == "grunnkrets" ~ "G"))
     
 # Legge til dubletter med sekssifret sone-kode i GEO, og GEOniv == "S", for alle K og B
 soner <- newtab %>%                                 # Kopierer ut K og B, og bygger om kopien til S
@@ -248,7 +250,7 @@ ryddetOld <- ryddetOld %>%
 ryddetOld <- ryddetOld %>%
     select(GEO, NAVN, FRA, TIL, GEOniv, TYP) %>%
     dplyr::bind_rows(newtab) %>%
-    arrange(GEO, GEOniv)
+    arrange(GEO, GEOniv, TIL)
 
 
 ```
@@ -257,7 +259,33 @@ Nå skal 'ryddetOld' være klar til å bli skrevet tilbake til Access som tabell
 - Den gamle tabellen er bevart, bortsett fra at TIL-årstall er endret til fjoråret for alle utgående koder.
 - Nye koder er hektet på.
 
+OBS: HELSEREGIONER er ikke tatt med i logikken, så skiftet fra 51-54 til 81-84 i 2020 er ikke med. 
+Men i skarp tabell ligger 51-53 allerede inne med TIL == 2019, så de skulle ikke påvirkes i noe fall.
 
+
+## Skrive tabell GeoKoder tilbake til Access
+I RODBC-pakken: Jeg klarer ikke å skrive til en eksisterende tabell. Hverken sqlSave eller sqlUpdate gjør det, de kræsjet uansett hvilke options jeg satte.
+    I sqlSave: Option *safer* må være False, ellers sperres skriving til en eksisterende tabell (bare append er lov).
+    
+Men det gikk å skrive til en nyopprettet tabell.
+Jeg prøver derfor å først slette en eventuell tidligere opprettet tabell med samme navn, og så skrive den nye.
+Må følge opp med å endre tabellnavn i Access så den nye blir skarp.
+
+```{r hjelpekommandoer, include=FALSE}
+RODBC::sqlTables(target, tableName = "GeoKoder_ny")
+```
+Må først sjekke om tabellen finnes. 
+Hvis ja, slett den. Ble nødt til å bruke base::if(), alt fra dplyr bare kræsjet.
+Så skrive den nye tabellen tilbake.
+
+```{r Skrive GeoKoder tilbake}
+# sql-kommandoene er fra RODBC-pakken.
+sjekk <- sqlTables(target, tableName = "GeoKoder_ny")   # Lager en data.frame med én rad hvis tabellen finnes, null rader ellers.
+if(length(sjekk$TABLE_NAME) > 0) sqlDrop(target, "GeoKoder_ny")
+
+sqlSave(target, ryddetOld, tablename = "GeoKoder_ny", rownames = TRUE, append = FALSE, safer = TRUE)
+
+```
 
 
 
