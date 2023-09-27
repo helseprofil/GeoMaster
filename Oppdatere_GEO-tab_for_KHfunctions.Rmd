@@ -253,7 +253,7 @@ ryddetOld <- ryddetOld %>%
 ryddetOld <- ryddetOld %>%
     select(GEO, NAVN, FRA, TIL, GEOniv, TYP) %>%
     dplyr::bind_rows(newtab) %>%
-    arrange(GEO, GEOniv, TIL)
+    arrange(GEO, GEOniv, TIL)       # Sorterer tabellen
 
 
 ```
@@ -277,7 +277,7 @@ Må følge opp med å endre tabellnavn i Access så den nye blir skarp.
 *Dette krever sikkert alenetilgang til databasen.*
 
 
-```{r hjelpekommandoer, include=FALSE}
+```{r hjelpekommandoer, include=FALSE, eval=FALSE}
 RODBC::sqlTables(target, tableName = "GeoKoder_ny")
 ```
 
@@ -298,13 +298,16 @@ sqlSave(target, ryddetOld, tablename = "GeoKoder_ny", rownames = "ID", append = 
 Kontroll (hjelperutine)
 For noen av årgangene skal ikke oppdateringen føre til noen endringer ...
 
-```{r kontroll, include=FALSE}
+```{r kontroll, include=FALSE, eval=TRUE}
 kontroll <- sqlQuery(target, paste("SELECT * FROM GeoKoder_ny"), as.is = c(2,3,6,7)) # Beholder noen kolonner som string
 
 kontroll <- kontroll %>%
-    dplyr::select(-"ID")            # ID-kolonnen har ulike tall i de to datasettene.
+    dplyr::select(-"ID") %>%        # ID-kolonnen har ulike tall i de to datasettene.
+    arrange(GEO, GEOniv, TIL)       # Sorterer tabellen
+    
 old_GeoKoder <- old_GeoKoder %>%
-    select(-"ID")
+    select(-"ID") %>%
+    arrange(GEO, GEOniv, TIL)       # Sorterer tabellen
 
 all.equal(kontroll, old_GeoKoder)
 
