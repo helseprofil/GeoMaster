@@ -13,8 +13,9 @@ For detaljer om Accesstabellene for KHfunctions, se Sharepoint:
 Folkehelseprofiler/Lukkede/Admin/Flytdiagram/Beskrivelse av oppgaver/Hva og hvor må gjøres ved Geo-endringer.docx
 
 *Ta en backup av skarp database og les og skriv mot den. Erstatte filnavn for å gjøre den til skarp etter sjekking.*
+*Lukk aktuelle tabeller før kjøring, ellers kan det kræsje.*
 
-For ID-felter (Autonummer i Access): La kolonnen mangle i datasettet ved skriving til Access, så oppretter Access selv nye ID-numre.
+For ID-felter (Autonummer i Access): Ta med rownames ved skriving, der det går an, eller opprett kolonnen før skriving.
 
 
 ## Target:
@@ -87,7 +88,7 @@ KH_db <- "VERSJONSARKIV/KHELSA202012051008.mdb"        # Fersk kopi
 GEO_db <- "raw-khelse/geo-koder.accdb"                  # Skal ikke skrive til denne.
 
 
-#drv    <- "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ="
+dbdriver	<- "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ="
 
 ```
 
@@ -97,10 +98,23 @@ SQL-query-teksten må ha tekstfnutter rundt 'aar', for aar er tekst i databasen 
 Jeg leser inn alle gyldige koder, og filtrerer vekk ting etterpå.
     For 2022, 2023: 356 K + 11 F + 38 B (inkl Sentrum/Marka), + Uoppgitt: (1+11)K + 1F + 4B = 422 koder.
 
-```{r connection og datainnlesing}
+```{r connection i RODBC, eval=FALSE}
 # Opprette forbindelse, "channel" i RODBC
 kilde <- RODBC::odbcConnectAccess2007(paste(DBroot, GEO_db, sep = "/"))
 target <- RODBC::odbcConnectAccess2007(paste(DBroot, KH_db, sep = "/"))
+
+```
+
+```{r connection i DBI}
+dbname	<- paste(DBroot, GEO_db, sep = "/")
+kilde <- DBI::dbConnect(odbc::odbc(),
+                          .connection_string = paste0(dbdriver, dbname),
+                          encoding = "latin1")
+
+dbname	<- paste(DBroot, KH_db, sep = "/")   # Har satt opp parameterne i første chunk.
+target 	<- DBI::dbConnect(odbc::odbc(),
+                          .connection_string = paste0(dbdriver, dbname),
+                          encoding = "latin1")
 
 ```
 
@@ -121,8 +135,18 @@ kladd <- DUMMYDATA %>%
 # Tabell GeoKoder
 ```{r GeoKoder preppe ny input}
 # Hente data
-DATA <- RODBC::sqlQuery(kilde, paste("SELECT * FROM tblGeo WHERE validTo = ", "\'", aar, "\'", sep = ""))
-old_GeoKoder <- sqlQuery(target, paste("SELECT * FROM GeoKoder"))   # Her blir GEO Integer, for å matche tblGeo.
+    #DATA <- RODBC::sqlQuery(kilde, paste("SELECT * FROM tblGeo WHERE validTo = ", "\'", aar, "\'", sep = ""))
+    #old_GeoKoder <- sqlQuery(target, paste("SELECT * FROM GeoKoder"))   # Her blir GEO Integer, for å matche tblGeo.
+
+DATA <- DBI::dbGetQuery(kilde, paste("SELECT * FROM tblGeo WHERE validTo = ", "\'", aar, "\'", sep = ""))
+# Her blir validTo Character. Må endre til Integer for å matche GeoKoder ved append.
+    # Kunne også ha brukt samme function til å lese hhv. DATA og old_GeoKoder ...
+DATA <- DATA %>%
+	mutate(across(
+		.cols = 'validTo',
+		.fns = ~ as.integer(.x)))
+
+old_GeoKoder <- DBI::dbReadTable(target, "GeoKoder")    
 
 # Filtrere fram gyldige koder som må ligge i target-tabellen GeoKoder
 newtab <- DATA %>% 
@@ -144,7 +168,7 @@ newtab <- newtab %>%
     dplyr::select(-grunnkrets, -kommune, -fylke, -bydel, -batch) %>% #fjerne kolonner
     dplyr::rename(NAVN = name) %>%                                   #nytt kolonnenavn
     dplyr::rename(FRA = validTo) %>%                                 #ditto, gyldighet av ny kode starter nå
-    dplyr::mutate(TIL = 9999)                                        #ny kolonne med siste gyldighetsår
+    dplyr::mutate(TIL = 9999)                                      #ny kolonne med siste gyldighetsår
 
 # Lage string geokoder
     # Legge til ledende null hvis geokoden er 3-5-7-sifret
@@ -202,14 +226,22 @@ kommYYYY <- paste("kommune", tabaar, sep = "")
 fylkYYYY <- paste("fylke", tabaar, sep = "")
     
 # Hente de to kildetabellene som gir utgående koder, og filtrere fram bare endringer i riktig årgang
-    # 'as.is' gjør at alt importeres som string (chr), selv om changeOccurred er num i Access. Dette beskrives i
+
+    # RODBC: 'as.is' gjør at alt importeres som string (chr), selv om changeOccurred er num i Access. Dette beskrives i
     # help-fila for RODBC::sqlQuery.
-kommtab <- RODBC::sqlQuery(kilde, 
-                           paste("SELECT * FROM ", kommYYYY, " WHERE changeOccurred = ", "\'", aar, "\'", sep = ""),
-                           as.is = TRUE)
-fylktab <- RODBC::sqlQuery(kilde, 
-                           paste("SELECT * FROM ", fylkYYYY, " WHERE changeOccurred = ", "\'", aar, "\'", sep = ""),
-                           as.is = TRUE)
+
+    #kommtab <- RODBC::sqlQuery(kilde, 
+    #                           paste("SELECT * FROM ", kommYYYY, " WHERE changeOccurred = ", "\'", aar, "\'", sep = ""),
+    #                           as.is = TRUE)
+    #fylktab <- RODBC::sqlQuery(kilde, 
+    #                           paste("SELECT * FROM ", fylkYYYY, " WHERE changeOccurred = ", "\'", aar, "\'", sep = ""),
+    #                           as.is = TRUE)
+kommtab <- DBI::dbGetQuery(kilde, 
+                           paste("SELECT * FROM ", kommYYYY, " WHERE changeOccurred = ", "\'", aar, "\'", sep = ""))
+fylktab <- DBI::dbGetQuery(kilde, 
+                           paste("SELECT * FROM ", fylkYYYY, " WHERE changeOccurred = ", "\'", aar, "\'", sep = ""))
+
+
 utgaaende <- kommtab %>%
     dplyr::bind_rows(fylktab) %>%         # Appende de to tabellene
     dplyr::filter(!is.na(oldCode)) %>%    # Beholde bare rader MED en oldCode. IKKE TESTET, 2021-tabellene har ingen UTEN.
@@ -228,7 +260,8 @@ utgaaende_K <- utgaaende %>% filter(stringr::str_length(oldCode) == 4) %>%
     # og 6-sifrede Soner, og disse må bevares. Kan ikke filtrere vekk noe, må bare endre i de riktige radene.
     # Så jeg bruker en flaggvariabel.
 
-old_GeoKoder <- sqlQuery(target, paste("SELECT * FROM GeoKoder"), as.is = TRUE)   # Her blir GEO bevart som string
+#old_GeoKoder <- RODBC::sqlQuery(target, paste("SELECT * FROM GeoKoder"), as.is = TRUE)   # Her blir GEO bevart som string
+old_GeoKoder <- DBI::dbReadTable(target, "GeoKoder")    # Geo leses som string
 fjoraar <- aar - 1
 
 # Flagge de radene som skal endres:
@@ -285,7 +318,7 @@ Må først sjekke om tabellen finnes.
 Hvis ja, slett den. Ble nødt til å bruke base::if(), alt fra dplyr bare kræsjet.
 Så skrive den nye tabellen tilbake.
 
-```{r Skrive GeoKoder tilbake}
+```{r Skrive GeoKoder tilbake, eval=FALSE}
 # sql-kommandoene er fra RODBC-pakken.
 sjekk <- sqlTables(target, tableName = "GeoKoder_ny")   # Lager en data.frame med én rad hvis tabellen finnes, null rader ellers.
 if(length(sjekk$TABLE_NAME) > 0) sqlDrop(target, "GeoKoder_ny")
@@ -294,12 +327,46 @@ sqlSave(target, ryddetOld, tablename = "GeoKoder_ny", rownames = "ID", append = 
 
 ```
 
+```{r Skrive GeoKoder tilbake using DBI}
+dbname	<- paste(DBroot, KH_db, sep = "/")   # Har satt opp parameterne i første chunk.
+dbconn 	<- DBI::dbConnect(odbc::odbc(),
+                          .connection_string = paste0(dbdriver, dbname),
+                          encoding = "latin1")
+tblname 	<- "GeoKoder_ny"
+
+if(dbExistsTable(dbconn, tblname)) DBI::dbRemoveTable(dbconn, tblname)
+
+dbWriteTable(conn = dbconn, name = tblname, value = ryddetOld, batch_rows = 1, row.names = "ID", overwrite = TRUE)
+# https://github.com/r-dbi/odbc/issues/263   forklarer batch_rows-parameteren.
+
+dbDisconnect(dbconn)
+
+```
+
+```{r Skrive GeoKoder tilbake using orgdata, eval=FALSE}
+# Yusman viste meg at orgdatapakken inneholder verktøy for både lesing, slette tabell og skriving.
+# Alt ligger som objektorientert programmering, så det er litt uvant måte å tenke på.
+
+# Må opprette en ID-kolonne, for her er det ikke option i selve kommandoen for å ta med rownames.
+ryddetOld <- ryddetOld %>%
+    mutate(ID = row_number()) %>%   # Ny kolonne blir lagt til høyre.
+    relocate(ID)                    # Default er å flytte kolonnen til venstre kant.
+
+
+KHconn <- KHelse$new(dbname)                        # Oppretter et objekt som inneholder både kobling til angitt database, og 
+                                                    # funksjoner for å jobbe mot den.
+
+KHconn$db_write(name = tblname, value = ryddetOld, write = TRUE)    # Overskriver tabellen hvis den finnes. 
+                                                                    # OBS: Tar lang tid - et par minutter.
+```
+
 
 Kontroll (hjelperutine)
 For noen av årgangene skal ikke oppdateringen føre til noen endringer ...
 
 ```{r kontroll, include=FALSE, eval=TRUE}
-kontroll <- sqlQuery(target, paste("SELECT * FROM GeoKoder_ny"), as.is = c(2,3,6,7)) # Beholder noen kolonner som string
+#kontroll <- sqlQuery(target, paste("SELECT * FROM GeoKoder_ny"), as.is = c(2,3,6,7)) # Beholder noen kolonner som string
+kontroll <- DBI::dbGetQuery(target, "SELECT * FROM GeoKoder_ny")
 
 kontroll <- kontroll %>%
     dplyr::select(-"ID") %>%        # ID-kolonnen har ulike tall i de to datasettene.
