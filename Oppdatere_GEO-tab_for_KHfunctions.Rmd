@@ -208,7 +208,7 @@ newtab <- newtab %>%
     
 ```
 
-```{r GeoKoder rense gammel tabell}
+```{r Lese inn K- og F- kildetabeller}
 # Sette fjorårets årstall som TIL for utgående koder.
     # For å finne de utgående kodene: Må lese i 'geo-koder.accdb' (kilden) tabellene 'kommuneYYYY' og 'fylkeYYYY' 
     # for YYYY == <ny geo-årgang>. 
@@ -244,7 +244,9 @@ kommtab <- DBI::dbGetQuery(kilde,
 fylktab <- DBI::dbGetQuery(kilde, 
                            paste("SELECT * FROM ", fylkYYYY, " WHERE changeOccurred = ", "\'", aar, "\'", sep = ""))
 
+```
 
+```{r GeoKoder rense gammel tabell}
 utgaaende <- kommtab %>%
     dplyr::bind_rows(fylktab) %>%         # Appende de to tabellene
     dplyr::filter(!is.na(oldCode)) %>%    # Beholde bare rader MED en oldCode. 
@@ -397,5 +399,6 @@ omkodinger <- kommtab %>%
     dplyr::bind_rows(fylktab) %>%
     dplyr::filter(!is.na(oldCode))  # Beholde bare rader MED en oldCode. 
 
+old_KnrHarm <- 
 ```
 
