@@ -1,0 +1,154 @@
+---
+title: "GEO_tabeller"
+author: "Vegard"
+date: "2023-10-13"
+output: html_document
+---
+
+Script to compare and update the GEO-tables in ORGDATA and KHELSA
+
+
+```{r setup, include=FALSE}
+library(orgdata)
+library(RODBC)
+library(data.table)
+
+# Sett encoding for R >= 4.2
+
+if(as.numeric(R.version$major) >= 4 & as.numeric(R.version$minor) >= 2){
+    Sys.setlocale("LC_ALL", "nb-NO.UTF-8")
+}
+```
+
+# Update GEO-tables for ORGDATA
+
+The following codes are used to generate updated versions of the geo-tables in `Orgdata` (geo-koders.accdb)
+
+- Saves tables in environment for inspection, check this before writing anything to the database
+- Change `year` to latest
+- Change `write` to TRUE to update `recoding tables` in database
+- Change `append` to TRUE to update `tblGeo` in database
+
+```{r}
+year <- 2024
+write <- FALSE # only applies to recoding tables below, change to TRUE to update in database
+append <- FALSE # only applies to tblGeo below, change to TRUE to update in database
+
+# Recoding tables
+assign(paste0("kommune", year), orgdata::geo_recode("k", from = 1990, to = year, write = write, append = FALSE))
+assign(paste0("fylke", year), orgdata::geo_recode("f", from = 1990, to = year, write = write, append = FALSE))
+assign(paste0("grunnkrets", year), orgdata::geo_recode("g", from = 1990, to = year, write = write, append = FALSE))
+
+# tblGeo
+tblGeo <- geo_map(year = aargang, write = FALSE, append = append)
+```
+
+# Update GEO-tables for KHELSA
+
+The following codes are used to generate updated versions of the tables `GeoKoder` and `KnrHarm` in `KHELSA` (KHELSA.mdb)
+
+## Connection to KHELSA and geo-koder database
+
+- Read relevant tables
+- convert all geo-columns to character and add leading 0
+
+```{r}
+year <- 2024
+KHELSA <- RODBC::odbcConnectAccess2007("F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/STYRING/KHELSA.mdb")
+GEOtables <- RODBC::odbcConnectAccess2007("F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/STYRING/raw-khelse/geo-koder.accdb")
+
+
+# Function to convert selected columns to character and add leading 0
+addleading0 <- function(data, cols){
+    
+    data[, (cols) := lapply(.SD, as.character), .SDcols = cols]
+    
+    for(i in 1:length(cols)){
+        data[nchar(get(cols[i])) %in% c(1,3,5), (cols[i]) := paste0("0", get(cols[i]))]
+    }
+    
+    data[]
+}
+
+# Read relevant tables and apply `addleading0()`
+
+## GeoKoder
+GeoKoder <- setDT(sqlQuery(KHELSA, "SELECT * FROM GeoKoder"))
+addleading0(GeoKoder, "GEO")
+## KnrHarm
+KnrHarm <- setDT(sqlQuery(KHELSA, "SELECT * FROM KnrHarm"))
+addleading0(KnrHarm, c("GEO", "GEO_omk"))
+
+## kommune and fylke
+kommune <- setDT(sqlQuery(GEOtables, paste0("SELECT oldCode, currentCode, changeOccurred FROM kommune", year)))
+addleading0(kommune, c("oldCode", "currentCode"))
+
+fylke <- setDT(sqlQuery(GEOtables, paste0("SELECT oldCode, currentCode, changeOccurred FROM fylke", year)))
+addleading0(fylke, c("oldCode", "currentCode"))
+
+## tblGeo
+tblGeo <- setDT(sqlQuery(GEOtables, paste0("SELECT * FROM tblGeo WHERE validTo = '", year, "' AND level <> 'grunnkrets'")))
+addleading0(tblGeo, c("code", "grunnkrets", "kommune", "fylke", "bydel"))
+```
+
+## Update KnrHarm
+
+```{r}
+# add orig = KnrHarm
+
+KnrHarm[, orig := "KnrHarm"]
+
+# combine kommune and fylke, remove oldCode == NA
+# change names to GEO, GEO_omk, and HARMstd
+# Add orig = orgdata
+orgdatarecode <- rbindlist(list(kommune, fylke))[!is.na(oldCode)][, orig := "orgdata"]
+setnames(orgdatarecode, 
+         c("oldCode", "currentCode", "changeOccurred"),
+         c("GEO", "GEO_omk", "HARMstd"))
+
+# Join the existing KnrHarm and orgdata tables
+comb <- rbindlist(list(KnrHarm, orgdatarecode))
+
+# Remove rows where GEO == GEO_omk (which doesn't make sense)
+comb <- comb[GEO != GEO_omk]
+
+# Remove rows where GEO_omk reappears in GEO due to future recoding
+# e.g. 02 (Akershus) -> 30 (Viken) -> 32 (Akershus)
+validrecode <- comb[!GEO_omk %in% GEO][order(GEO)]
+
+### Check invalid recode, including the current recoding of GEO and GEO_omk
+invalidrecode <- comb[GEO_omk %in% GEO]
+invalidrecode[validrecode, correct_omk := i.GEO_omk, on = .(GEO = GEO)]
+invalidrecode[validrecode, subsequent_omk := i.GEO_omk, on = .(GEO_omk = GEO)]
+invalidrecode[, c("HARMstd", "orig") := NULL]
+
+# Only keep unique combinations of GEO and GEO_omk
+validrecode <- unique(validrecode, by = c("GEO", "GEO_omk"))
+
+# Check that all values in GEO_omk are valid
+# validcodes are fetched from tblGeo, where validTo = year
+validcodes <- tblGeo[validTo == year, (code)]
+if(nrow(validrecode[!GEO_omk %in% validcodes]) > 1){
+    message("the following rows contain invalid values in GEO_omk")
+    validrecode[!GEO_omk %in% validcodes]
+} else {
+    message("All values in GEO_omk are valid for ", year)
+}
+
+
+# TODO!!!!
+# Rader som er fjernet fra KnrHarm og ikke tatt med i endelig tabell
+# Trenger å opprette rader for GEO -> correct_omk
+removed <- KnrHarm[!GEO %in% validrecode$GEO]
+
+invalidrecode[GEO %in% removed$GEO]
+
+kommune[oldCode == 3801]
+
+```
+
+## Update GeoKoder
+
+```{r}
+
+```
