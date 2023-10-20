@@ -1,3 +1,9 @@
+# Required packages
+
+library(RODBC)
+library(data.table)
+library(orgdata)
+
 # Functions used to update geo tables
 
 #' KnrHarmUpdate
@@ -11,13 +17,13 @@
 #' @examples
 #' KnrHarmUpdate(year = 2024, khelsa = "KHELSA.mdb", geokoder = "raw-khelse/geo-koder.accdb")
 KnrHarmUpdate <- function(year = 2024,
-                          khelsa = "KHELSA.mdb",
-                          geokoder = "raw-khelse/geo-koder.accdb"){
+                          basepath = basepath,
+                          khelsa = khelsa,
+                          geokoder = geokoder){
     
     # Connect to databases
     cat("\n Connecting to databases")
     RODBC::odbcCloseAll()
-    basepath <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/STYRING/"
     .KHELSA <- RODBC::odbcConnectAccess2007(paste0(basepath, khelsa))
     .GEOtables <- RODBC::odbcConnectAccess2007(paste0(basepath, geokoder))
     
@@ -84,12 +90,11 @@ KnrHarmUpdate <- function(year = 2024,
     # Quality control
     
     cat("\n--\nQuality control\n--\n\n")
-    ### Check whether any rows from the original KnrHarm table is removed and not properly replaced
     
+    ### Check whether any rows from the original KnrHarm table is removed and not properly replaced
     KnrHarmRemoved <- KnrHarm[!GEO %in% validrecode$GEO & GEO != GEO_omk]
     
     if(nrow(KnrHarmRemoved) > 0){
-        
         message(" - The following rows are removed from the original KnrHarm table, and not properly replaced")
         KnrHarmRemoved
     } else {
