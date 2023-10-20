@@ -19,8 +19,8 @@ if(as.numeric(R.version$major) >= 4 & as.numeric(R.version$minor) >= 2){
 source("https://raw.githubusercontent.com/helseprofil/GeoMaster/master/functions_GeoMaster.R")
 
 # Database file paths
-basepath <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/STYRING/"
-khelsa <- "KHELSA.mdb"
+root <- "F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/STYRING/"
+khelsa <- "test/KHELSA_test20231020.mdb"
 geokoder <- "raw-khelse/geo-koder.accdb"
 ```
 
@@ -58,12 +58,16 @@ The following codes are used to generate updated versions of the tables `GeoKode
     - All existing rows are kept or correctly updated
     - There are any missing values in the `GEO` or `GEO_omk` columns
     - All values in `GEO_omk` are valid according to `tblGeo` for the selected year
+    
+- Set `write = TRUE` to overwrite the table in Access. 
+    - This will replace the original table, so first make sure that the table is correct by running the code with `write = FALSE`
 
 ```{r}
-KnrHarmUpdate(year = 2024,
-              basepath = basepath,
-              khelsa = khelsa,
-              geokoder = geokoder)
+newtab <- KnrHarmUpdate(year = 2024,
+                        basepath = basepath,
+                        khelsa = khelsa,
+                        geokoder = geokoder,
+                        write = TRUE)
 ```
 
 ## Update GeoKoder
