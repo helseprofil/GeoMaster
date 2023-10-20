@@ -1,97 +1,4 @@
----
-title: "GEO_tabeller"
-author: "Vegard"
-date: "2023-10-13"
-output: html_document
----
-
-Script to compare and update the GEO-tables in ORGDATA and KHELSA
-
-
-```{r setup, include=FALSE}
-library(orgdata)
-library(RODBC)
-library(data.table)
-
-# Sett encoding for R >= 4.2
-
-if(as.numeric(R.version$major) >= 4 & as.numeric(R.version$minor) >= 2){
-    Sys.setlocale("LC_ALL", "nb-NO.UTF-8")
-}
-```
-
-# Update GEO-tables for ORGDATA
-
-The following codes are used to generate updated versions of the geo-tables in `Orgdata` (geo-koders.accdb)
-
-- Saves tables in environment for inspection, check this before writing anything to the database
-- Change `year` to latest
-- Change `write` to TRUE to update `recoding tables` in database
-- Change `append` to TRUE to update `tblGeo` in database
-
-```{r}
-year <- 2024
-write <- FALSE # only applies to recoding tables below, change to TRUE to update in database
-append <- FALSE # only applies to tblGeo below, change to TRUE to update in database
-
-# Recoding tables
-assign(paste0("kommune", year), orgdata::geo_recode("k", from = 1990, to = year, write = write, append = FALSE))
-assign(paste0("fylke", year), orgdata::geo_recode("f", from = 1990, to = year, write = write, append = FALSE))
-assign(paste0("grunnkrets", year), orgdata::geo_recode("g", from = 1990, to = year, write = write, append = FALSE))
-
-# tblGeo
-tblGeo <- geo_map(year = aargang, write = FALSE, append = append)
-```
-
-# Update GEO-tables for KHELSA
-
-The following codes are used to generate updated versions of the tables `GeoKoder` and `KnrHarm` in `KHELSA` (KHELSA.mdb)
-
-## Connection to KHELSA and geo-koder database
-
-- Read relevant tables
-- convert all geo-columns to character and add leading 0
-
-```{r}
-year <- 2024
-KHELSA <- RODBC::odbcConnectAccess2007("F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/STYRING/KHELSA.mdb")
-GEOtables <- RODBC::odbcConnectAccess2007("F:/Forskningsprosjekter/PDB 2455 - Helseprofiler og til_/PRODUKSJON/STYRING/raw-khelse/geo-koder.accdb")
-
-
-# Function to convert selected columns to character and add leading 0
-addleading0 <- function(data, cols){
-    
-    data[, (cols) := lapply(.SD, as.character), .SDcols = cols]
-    
-    for(i in 1:length(cols)){
-        data[nchar(get(cols[i])) %in% c(1,3,5), (cols[i]) := paste0("0", get(cols[i]))]
-    }
-}
-
-# Read relevant tables and apply `addleading0()`
-
-## GeoKoder
-GeoKoder <- setDT(sqlQuery(KHELSA, "SELECT * FROM GeoKoder"))
-addleading0(GeoKoder, "GEO")
-## KnrHarm
-KnrHarm <- setDT(sqlQuery(KHELSA, "SELECT * FROM KnrHarm"))
-addleading0(KnrHarm, c("GEO", "GEO_omk"))
-
-## kommune and fylke
-kommune <- setDT(sqlQuery(GEOtables, paste0("SELECT oldCode, currentCode, changeOccurred FROM kommune", year)))
-addleading0(kommune, c("oldCode", "currentCode"))
-
-fylke <- setDT(sqlQuery(GEOtables, paste0("SELECT oldCode, currentCode, changeOccurred FROM fylke", year)))
-addleading0(fylke, c("oldCode", "currentCode"))
-
-## tblGeo
-tblGeo <- setDT(sqlQuery(GEOtables, paste0("SELECT * FROM tblGeo WHERE validTo = '", year, "' AND level <> 'grunnkrets'")))
-addleading0(tblGeo, c("code", "grunnkrets", "kommune", "fylke", "bydel"))
-```
-
-## Update KnrHarm
-
-```{r}
+# Functions used to update geo tables
 
 #' KnrHarmUpdate
 #' 
@@ -114,30 +21,18 @@ KnrHarmUpdate <- function(year = 2024,
     .KHELSA <- RODBC::odbcConnectAccess2007(paste0(basepath, khelsa))
     .GEOtables <- RODBC::odbcConnectAccess2007(paste0(basepath, geokoder))
     
-        # Function to convert GEO columns to character and add leading 0
-        addleading0 <- function(data){
-            
-            allcols <- c("GEO", "GEO_omk", "oldCode", "currentCode", "code", "grunnkrets", "kommune", "fylke", "bydel")
-            cols <- names(data)[names(data) %in% allcols]
-            data[, (cols) := lapply(.SD, as.character), .SDcols = cols]
-            for(i in 1:length(cols)){
-                data[nchar(get(cols[i])) %in% c(1,3,5), (cols[i]) := paste0("0", get(cols[i]))]
-            }
-            data[]
-            }
-    
     # Read and format original tables
     cat("\n Read, format, and combine original tables")
     KnrHarm <- addleading0(
         setDT(sqlQuery(.KHELSA, "SELECT * FROM KnrHarm"))
-        )
+    )
     
     kommunefylke <- addleading0(
         data.table::rbindlist(list(setDT(sqlQuery(.GEOtables, paste0("SELECT oldCode, currentCode, changeOccurred FROM kommune", year))),
                                    setDT(sqlQuery(.GEOtables, paste0("SELECT oldCode, currentCode, changeOccurred FROM fylke", year)))
-                                   )
-                              )
         )
+        )
+    )
     setnames(kommunefylke, 
              c("oldCode", "currentCode", "changeOccurred"),
              c("GEO", "GEO_omk", "HARMstd"))
@@ -229,10 +124,14 @@ KnrHarmUpdate <- function(year = 2024,
     return(out)
 }
 
-```
-
-## Update GeoKoder
-
-```{r}
-
-```
+# Helper function to convert GEO columns to character and add leading 0
+addleading0 <- function(data){
+    
+    allcols <- c("GEO", "GEO_omk", "oldCode", "currentCode", "code", "grunnkrets", "kommune", "fylke", "bydel")
+    cols <- names(data)[names(data) %in% allcols]
+    data[, (cols) := lapply(.SD, as.character), .SDcols = cols]
+    for(i in 1:length(cols)){
+        data[nchar(get(cols[i])) %in% c(1,3,5), (cols[i]) := paste0("0", get(cols[i]))]
+    }
+    data[]
+}
