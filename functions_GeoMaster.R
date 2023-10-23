@@ -158,7 +158,7 @@ addleading0 <- function(data){
     cols <- names(data)[names(data) %in% allcols]
     data[, (cols) := lapply(.SD, as.character), .SDcols = cols]
     for(i in 1:length(cols)){
-        data[get(cols) != 0 & nchar(get(cols[i])) %in% c(1,3,5,7), (cols[i]) := paste0("0", get(cols[i]))]
+        data[get(cols[i]) != 0 & nchar(get(cols[i])) %in% c(1,3,5,7), (cols[i]) := paste0("0", get(cols[i]))]
     }
     data[]
 }
