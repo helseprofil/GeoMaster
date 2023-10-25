@@ -15,17 +15,17 @@ library(orgdata)
 #' @param geokoder Name of database file path, root folder = STYRING
 #'
 #' @examples
-#' KnrHarmUpdate(year = 2024, khelsa = "KHELSA.mdb", geokoder = "raw-khelse/geo-koder.accdb")
+#' KnrHarmUpdate(year = 2024, basepath = , khelsapath = "KHELSA.mdb", geokoderpath = "raw-khelse/geo-koder.accdb", write = FALSE)
 KnrHarmUpdate <- function(year = 2024,
-                          basepath = basepath,
-                          khelsa = khelsa,
-                          geokoder = geokoder){
+                          basepath = root,
+                          khelsapath = khelsa,
+                          geokoderpath = geokoder,
+                          write = FALSE){
     
     # Connect to databases
     cat("\n Connecting to databases")
-    RODBC::odbcCloseAll()
-    .KHELSA <- RODBC::odbcConnectAccess2007(paste0(basepath, khelsa))
-    .GEOtables <- RODBC::odbcConnectAccess2007(paste0(basepath, geokoder))
+    .KHELSA <- RODBC::odbcConnectAccess2007(paste0(basepath, khelsapath))
+    .GEOtables <- RODBC::odbcConnectAccess2007(paste0(basepath, geokoderpath))
     
     # Read and format original tables
     cat("\n Read, format, and combine original tables")
@@ -119,13 +119,35 @@ KnrHarmUpdate <- function(year = 2024,
     } else {
         message(" - All values in GEO_omk are valid for ", year)
     }
+
+
+    # Write to Access    
+    if(write){
+        
+        # Ask for confirmation before writing
+        opts <- c("Overwrite", "Cancel")
+        answer <- utils::menu(choices = opts, 
+                              title = paste0("Whoops!! You are now replacing the table KnrHarm in:\n\n", 
+                                             basepath, khelsapath, 
+                                             "\n\nPlease confirm or cancel:"))
     
-    cat("\n\n--\nFinal Output\n--\n\n")
-    print(out)
+       if(opts[answer] == "Overwrite"){
+           cat("\nUpdating the KnrHarm table in KHELSA...\n")
+           RODBC::sqlSave(channel = .KHELSA, 
+                          dat = out, 
+                          tablename = "KnrHarm", 
+                          append = FALSE, 
+                          rownames = FALSE, 
+                          safer = FALSE)
+           cat(paste0("\nDONE! New table written to:\n", basepath, khelsapath, "\n\n"))
+           } else {
+               cat(paste0("\nYou cancelled, and the table was not overwritten! Puh!\n"))
+               }
+    }
     
     RODBC::odbcClose(.KHELSA)
     RODBC::odbcClose(.GEOtables)
-    
+
     return(out)
 }
 
@@ -136,7 +158,7 @@ addleading0 <- function(data){
     cols <- names(data)[names(data) %in% allcols]
     data[, (cols) := lapply(.SD, as.character), .SDcols = cols]
     for(i in 1:length(cols)){
-        data[nchar(get(cols[i])) %in% c(1,3,5,7), (cols[i]) := paste0("0", get(cols[i]))]
+        data[get(cols[i]) != 0 & nchar(get(cols[i])) %in% c(1,3,5,7), (cols[i]) := paste0("0", get(cols[i]))]
     }
     data[]
 }
