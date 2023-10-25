@@ -1,8 +1,6 @@
-# Required packages
-
-library(RODBC)
-library(data.table)
-library(orgdata)
+# Install and load packages
+source("https://raw.githubusercontent.com/helseprofil/misc/main/utils.R")
+kh_load(RODBC, data.table, orgdata)
 
 # Functions used to update geo tables
 
