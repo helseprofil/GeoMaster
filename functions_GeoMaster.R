@@ -11,11 +11,13 @@ library(orgdata)
 #' Function updating the KnrHarm table in KHELSA
 #'
 #' @param year current year
-#' @param khelsa Name of database file path, root folder = STYRING
-#' @param geokoder Name of database file path, root folder = STYRING
+#' @param basepath path to root folder
+#' @param khelsapath relative file path to khelsa database
+#' @param geokoderpath relative file path to geokoder database
+#' @param write option to overwrite table in khelsa
 #'
 #' @examples
-#' KnrHarmUpdate(year = 2024, basepath = , khelsapath = "KHELSA.mdb", geokoderpath = "raw-khelse/geo-koder.accdb", write = FALSE)
+#' KnrHarmUpdate(year = 2024, basepath = root, khelsapath = "KHELSA.mdb", geokoderpath = "raw-khelse/geo-koder.accdb", write = FALSE)
 KnrHarmUpdate <- function(year = 2024,
                           basepath = root,
                           khelsapath = khelsa,
@@ -148,6 +150,132 @@ KnrHarmUpdate <- function(year = 2024,
     RODBC::odbcClose(.KHELSA)
     RODBC::odbcClose(.GEOtables)
 
+    return(out)
+}
+
+
+#' GeoKoderUpdate
+#' 
+#' Function updating the KnrHarm table in KHELSA
+#'
+#' @param year current year
+#' @param basepath root folder
+#' @param khelsapath relative path to khelsa database
+#' @param geokoderpath relative path to geokoder database
+#' @param write option to overwrite the table in khelsa database
+#'
+#' @examples  GeoKoderUpdate(year = 2024, basepath = root, khelsapath = "KHELSA.mdb", geokoderpath = "raw-khelse/geo-koder.accdb", write = FALSE)
+GeoKoderUpdate <- function(year = 2024,
+                           basepath = root,
+                           khelsapath = khelsa,
+                           geokoderpath = geokoder,
+                           write = FALSE){
+    
+    # Connect to databases
+    cat("\n Connecting to databases")
+    .KHELSA <- RODBC::odbcConnectAccess2007(paste0(basepath, khelsapath))
+    .GEOtables <- RODBC::odbcConnectAccess2007(paste0(basepath, geokoderpath))
+    
+    # Read and format original tables
+    cat("\n Read, format, and combine original tables")
+    GeoKoder <- addleading0(setDT(sqlQuery(.KHELSA, "SELECT * FROM GeoKoder WHERE GEOniv <> 'S'")))
+    
+    tblGeo <- addleading0(
+        setDT(sqlQuery(.GEOtables, paste0("SELECT [code], [name], [validTo], [level] FROM tblGeo WHERE validTo = '", year, "' AND level <> 'grunnkrets'")))
+    )
+    
+    ## Change column names of tblGeo to comply with GeoKoder
+    setnames(tblGeo, 
+             old = c("code", "level", "name"),
+             new = c("GEO", "GEOniv", "NAVN"),
+             skip_absent = T)
+    
+    ## Change GEOniv to F/K/B, add ID and TYP columns
+    tblGeo[, `:=` (GEOniv = fcase(GEOniv == "fylke", "F",
+                                  GEOniv == "kommune", "K",
+                                  GEOniv == "bydel", "B"),
+                   ID = 1,
+                   TYP = fcase(grepl("99$", GEO), "U",
+                               default = "O"))]
+    
+    # Identify rows with expired GEO-codes, and set TIL = year - 1
+    # Exception for 99, 9999, and 999999
+    GeoKoder[!GEO %in% c("99", "9999", "999999") & 
+                 !GEO %in% tblGeo$GEO & GEOniv %in% c("F", "K", "B") & TIL == 9999,
+             TIL := year - 1]    
+    
+    # Identify new rows from tblGeo, which must be added to GeoKoder
+    newrows <- tblGeo[!GEO %in% GeoKoder$GEO]
+    
+    ## Set FRA = validTo and TIL = 9999
+    ## Change column order to comply with GeoKoder
+    setnames(newrows, 
+             old = "validTo",
+             new = "FRA")
+    newrows[, TIL := 9999]
+    setcolorder(newrows, names(GeoKoder))
+    
+    # Add new codes to list
+    comb <- data.table::rbindlist(list(GeoKoder, newrows))
+    
+    # generate rows with GEOniv = S
+    sone <- comb[GEOniv %in% c("B", "K") & GEO != "999999"]
+    sone[, GEOniv := "S"]
+    sone[nchar(GEO) == 4, GEO := paste0(GEO, "00")]
+    
+    # Generate final output, and add ID column
+    out <- data.table::rbindlist(list(comb, sone))[order(GEO)]
+    out[, ID := .I]
+    
+    # Quality control
+    
+    cat("\n--\nQuality control\n--\n\n")
+    
+    ## Check that all values of GEO (F, K, B) with TYP == "O" are valid codes for current year according to tblGeo
+    allvalid <- out[TIL == 9999 & TYP == "O" & GEOniv %in% c("F", "K", "B") & !GEO %in% tblGeo$GEO]
+    if(nrow(allvalid) > 0){
+        message(" - The following rows contain invalid GEO codes for ", year)
+        allvalid
+    } else {
+        message(" - All GEO codes with TYP = 'O' and TIL == 9999 are valid for ", year)
+    }
+    
+    ## Check that all valid GEO-codes are included in GeoKoder with TIL == 9999
+    validincluded <- tblGeo$GEO[!tblGeo$GEO %in% out[TIL == "9999", GEO]]
+    if(length(validincluded) > 0){
+        message(" - The following valid GEO codes for ", year, " are not included in GeoKoder, or have TIL != 9999")
+        validincluded
+    } else {
+        message(" - All valid GEO codes for ", year, " are included in GeoKoder")
+    }
+    
+    # Write to Access    
+    if(write){
+        
+        # Ask for confirmation before writing
+        opts <- c("Overwrite", "Cancel")
+        answer <- utils::menu(choices = opts, 
+                              title = paste0("Whoops!! You are now replacing the table GeoKoder in:\n\n", 
+                                             basepath, khelsapath, 
+                                             "\n\nPlease confirm or cancel:"))
+        
+        if(opts[answer] == "Overwrite"){
+            cat("\nUpdating the GeoKoder table in KHELSA...\n")
+            RODBC::sqlSave(channel = .KHELSA, 
+                           dat = out, 
+                           tablename = "GeoKoder", 
+                           append = FALSE, 
+                           rownames = FALSE, 
+                           safer = FALSE)
+            cat(paste0("\nDONE! New table written to:\n", basepath, khelsapath, "\n\n"))
+        } else {
+            cat(paste0("\nYou cancelled, and the table was not overwritten! Puh!\n"))
+        }
+    }
+    
+    RODBC::odbcClose(.KHELSA)
+    RODBC::odbcClose(.GEOtables)
+    
     return(out)
 }
 
