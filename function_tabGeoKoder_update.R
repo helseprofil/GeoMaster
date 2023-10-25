@@ -82,7 +82,7 @@ newtab <- newtab %>%
 # Add leading zero if the code has 3-5-7 digits
 newtab <- newtab %>%
     mutate(GEO = as.character(code)) %>%      # Make new chr-variable GEO. Must delete 'code' later.
-    mutate(GEO = dplyr::if_else(stringr::str_length(GEO) %in% c("1", "3", "5", "7"),    #condition
+    mutate(GEO = dplyr::if_else(stringr::str_length(GEO) %in% c("1", "3", "5", "7") & GEO != 0 ,    #condition
                                 paste("0", GEO, sep = ""),                         #if True
                                 GEO))                                              #if False
 
