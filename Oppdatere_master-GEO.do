@@ -1,10 +1,8 @@
 /*  Verktøyscript:
 	OPPDATERE GEO-MASTERFIL FRA  ETT ÅR TIL NESTE - TIDLØST FILNAVN FOR GIT-REPO
 
-*** KMD svarer i mail at de ikke kjenner til noen endringer i geo-inndelingen for 2022.
-	Men de kjenner ikke planene for bydeler. 
+*** Nytt H-23: Starter med oppdatert tabell tblGeo fra norgeo/orgdata-filen geo-koder.accdb.	
 	
-	Scriptet kopierer masterfil fra 2020, og retter navn etc.
 	
 	
 ***		Obs om Bydeler i Stavanger:
@@ -57,6 +55,9 @@
 		Trøndelag - Trööndelage
 	* For 2023:
 	  - Nye samiske navn: Trondheim Tråanten, Røros Rossen
+	* For 2024:
+	  - Splitting av flere fylker, med nye fylkesnummer.
+	  - Derfor tatt utgangspunkt i oppdatert tblGeo fra orgdata-filen.
 		
 	*/
 
@@ -72,7 +73,7 @@ set more off
 pause on
 
 *LEGG INN RETT ÅRSTALL!
-local profilaar "2023"
+local profilaar "2024"
 
 * KJØRING:
 ************************************************************************
@@ -111,21 +112,41 @@ cd "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler/`profil
 	exit
 *-------------------------------------------------*/
 
-* Hente inn fjorårets masterfil. 
-*use "../`fjoraar'/Stedsnavn_SSB_ASCII.dta", clear	
-use "../`fjoraar'/Stedsnavn_SSB_Unicode.dta", clear	
-*exit
+* Hente inn kildetabell
+/*	odbc load, exec(`"SELECT Fr.INDIKATOR, Fr.MODUS FROM FRISKVIK Fr 
+	WHERE Fr.MODUS='F' "') ///
+	dsn("MS Access Database; DBQ=F:\Prosjekter\Kommunehelsa\PRODUKSJON\STYRING\KHELSA.mdb;")   clear */
 
-* RETTELSER
-replace Sted = "Evenes Evenášši" if strmatch(Sted, "Evenes")
-replace Sted = "Hábmer Hamarøy" if strmatch(Sted, "Hamarøy*")
-replace Sted = "Nordland Nordlánnda" if strmatch(Sted, "Nordland")
-replace Sted = "Trøndelag Trööndelage" if strmatch(Sted, "Trøndelag")
-replace Sted = "Trondheim Tråanten" if strmatch(Sted, "Trondheim")
-replace Sted = "Røros Rossen" if strmatch(Sted, "Røros")
+odbc load, exec(`"SELECT t.code, t.name, t.validTo, t.level FROM tblGeo t WHERE t.validTo = '`profilaar'' AND t.level <> 'grunnkrets' "') ///
+dsn("MS Access Database; DBQ=F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\PRODUKSJON\STYRING\raw-khelse\geo-koder.accdb;")   clear
+
+rename (code name validTo level) (Sted_kode Sted Aar RegiontypeId)
+
+
+
+* RETTELSER  - samisk 's med pil ned' mangler
+replace Sted = "Evenes Evenášši" if strmatch(Sted, "Evenes*")
+replace Sted = "Kárášjohka Karasjok" if strmatch(Sted, "*Karasjok")
+
+* RYDDING
+drop if substr(Sted_kode, -2, 2) == "99"
+
+replace Sted = "Bydel " + Sted if length(Sted_kode) == 6 & substr(Sted_kode, 1, 4) == "0301"
+replace Sted = Sted + " bydel" if length(Sted_kode) == 6 & inlist(substr(Sted_kode, 1, 4), "4601", "5001")
+replace Sted = Sted + " kommunedel" if length(Sted_kode) == 6 & substr(Sted_kode, 1, 4) == "1103"
+
+replace RegiontypeId = strupper(RegiontypeId)
 
 ********************************************************************************
 * AVSLUTNING - LAGRE RESULTATFILER
+
+
+	** Ser ut som ny rekkefølge er egnet, nå med nye grunnlagsdata...
+
+
+
+
+
 
 *** 1) Komplett DTA-fil
 
