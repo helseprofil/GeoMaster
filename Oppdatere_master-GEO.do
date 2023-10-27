@@ -71,6 +71,7 @@ kommandoen cd "F:\Prosjekter\Kommunehelsa\Masterfiler\..(rett årstall).."
 assert `c(version)' >=14
 set more off
 pause on
+clear frames
 
 *LEGG INN RETT ÅRSTALL!
 local profilaar "2024"
@@ -81,9 +82,9 @@ local profilaar "2024"
 *  skriptet kjøres året før profilene produseres. Verifiser derfor at 
 * 		[årstall i filbanen] = [inneværende år] + 1
 ************************************************************************
-local aarstalliFilbanen = `profilaar' //real(`profilaar')
+local aarstalliFilbanen = real("`profilaar'") //`profilaar' 
 local innevaerendeAar = real(word("`c(current_date)'", 3))
-assert `aarstalliFilbanen'==`innevaerendeAar' // + 1 
+assert `aarstalliFilbanen'==`innevaerendeAar' + 1 
 
 local fjoraar  =  `profilaar'-1
 di `fjoraar'
@@ -112,17 +113,21 @@ cd "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler/`profil
 	exit
 *-------------------------------------------------*/
 
-* Hente inn kildetabell
+* Hente inn kildetabeller
 /*	odbc load, exec(`"SELECT Fr.INDIKATOR, Fr.MODUS FROM FRISKVIK Fr 
 	WHERE Fr.MODUS='F' "') ///
 	dsn("MS Access Database; DBQ=F:\Prosjekter\Kommunehelsa\PRODUKSJON\STYRING\KHELSA.mdb;")   clear */
 
 odbc load, exec(`"SELECT t.code, t.name, t.validTo, t.level FROM tblGeo t WHERE t.validTo = '`profilaar'' AND t.level <> 'grunnkrets' "') ///
 dsn("MS Access Database; DBQ=F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\PRODUKSJON\STYRING\raw-khelse\geo-koder.accdb;")   clear
-
 rename (code name validTo level) (Sted_kode Sted Aar RegiontypeId)
 
+frame create hreg
+frame change hreg
+odbc load, exec(`"SELECT * FROM GeoKoder G WHERE G.GEOniv = 'H' AND G.TIL = 9999 "') ///
+dsn("MS Access Database; DBQ=F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\PRODUKSJON\STYRING\KHELSA.mdb;")   clear
 
+frame change default
 
 * RETTELSER  - samisk 's med pil ned' mangler
 replace Sted = "Evenes Evenášši" if strmatch(Sted, "Evenes*")
@@ -135,7 +140,17 @@ replace Sted = "Bydel " + Sted if length(Sted_kode) == 6 & substr(Sted_kode, 1, 
 replace Sted = Sted + " bydel" if length(Sted_kode) == 6 & inlist(substr(Sted_kode, 1, 4), "4601", "5001")
 replace Sted = Sted + " kommunedel" if length(Sted_kode) == 6 & substr(Sted_kode, 1, 4) == "1103"
 
+replace Sted = subinstr(Sted, " - ", " ",.)		// Ta bort bindestreker mellom språkversjoner
+
+* Legge inn rad for Landet
+insobs 1, before(1)
+replace Sted_kode = "00" in 1
+replace Sted = "Hele landet" in 1
+replace Aar = "2024" in 1
+
 replace RegiontypeId = strupper(RegiontypeId)
+order Sted_kode Aar Sted RegiontypeId
+
 
 ********************************************************************************
 * AVSLUTNING - LAGRE RESULTATFILER
@@ -147,8 +162,43 @@ replace RegiontypeId = strupper(RegiontypeId)
 
 
 
+*** 1) RegionMaster: for oppdatering av Regiontabellen i utvalgsmekanismen på khp.fhi.no.
+*		- Dropper Sentrum og Marka i Oslo.
+*		- Dropper Helseregioner.
+*		- Lagres som Unicode-txt-fil, OG som Excelfil.
+* 	Egen versjon for Oppvekstprofiler, uten fylkene. (Kun txt-versjon)
+**************************************************************************************
 
-*** 1) Komplett DTA-fil
+preserve
+	gen HarBydel =.
+	replace HarBydel =1 if inlist(Sted_kode, "0301", "1103", "4601", "5001")
+	sort Sted_kode 
+	drop if Sted_kode == "030116" | Sted_kode == "030117"
+*pause Inni preserve	
+	export excel using "Geografiliste_`profilaar'_utenSentrumMarka.xlsx", firstrow(variables) replace
+	export delimited RegionMaster_`profilaar'.txt, delimiter(tab) nolabel replace
+	
+	drop if RegiontypeId == "FYLKE"
+	export delimited RegionMaster_OPPVEKST_`profilaar'.txt, delimiter(tab) nolabel replace
+restore
+
+
+*** 2) Komplett DTA-fil
+* Hekte på Helseregioner fra naboframe
+drop RegiontypeId Aar
+
+frame change hreg
+drop ID FRA TIL TYP GEOniv 
+rename (GEO NAVN) (Sted_kode Sted)
+order Sted_kode Sted
+
+frame change default
+frameappend hreg			// Stata 17: brukte package frameappend from http://fmwww.bc.edu/RePEc/bocode/f.
+							// search i Help for frameappend, klikk lenke, "click here to install". Er tillatt på FHI.
+
+* Lage numerisk GEO 
+destring Sted_kode, generate(geo)
+order Sted_kode Sted
 
 * SPES (og gjelder inntil videre): Eiganes og Våland blir for langt, lager femsiders profiler.
 * Fjerner "kommunedel" fra den aktuelle filen, men endrer ikke de andre filene.
@@ -163,34 +213,6 @@ save "Stedsnavn_SSB_Unicode.dta", replace
 replace Sted = "Eiganes og Våland kommunedel" if Sted_kode == "110303"
 *exit
 
-*** 2) RegionMaster: for oppdatering av Regiontabellen i utvalgsmekanismen på khp.fhi.no.
-*		- Dropper Sentrum og Marka i Oslo.
-*		- Dropper Helseregioner.
-*		- Lagres som Unicode-txt-fil, OG som Excelfil.
-* 	Egen versjon for Oppvekstprofiler, uten fylkene. (Kun txt-versjon)
-**************************************************************************************
-
-preserve
-	gen HarBydel =.
-	replace HarBydel =1 if (geo==301 | geo==1103 | geo==4601 | geo==5001 )
-	gen Aar=`profilaar'
-	gen RegiontypeId = "KOMMUNE" if length(Sted_kode)==4
-	replace RegiontypeId = "FYLKE" if length(Sted_kode)==2 & Sted_kode!="00"
-	replace RegiontypeId = "BYDEL" if length(Sted_kode)==6 
-	sort Sted_kode 
-	drop if Sted_kode == "030116" | Sted_kode == "030117"
-	drop if (geo > 80 & geo < 90)		//Helseregioner
-*pause Inni preserve	
-	keep Sted_kode Aar Sted RegiontypeId HarBydel
-	order Sted_kode Aar Sted RegiontypeId
-	export excel using "Geografiliste_`profilaar'_utenSentrumMarka.xlsx", firstrow(variables) replace
-	export delimited RegionMaster_`profilaar'.txt, delimiter(tab) nolabel replace
-	
-	drop if RegiontypeId == "FYLKE"
-	export delimited RegionMaster_OPPVEKST_`profilaar'.txt, delimiter(tab) nolabel replace
-restore
-
-*exit
 
 *** 3) EGEN FIL FOR BRUK I GRAFER ETC:
 * 		Numerisk Geo bør ha kommune- (etc)navnene som value labels, og korte navn. 
@@ -221,6 +243,7 @@ restore
 	//Språkversjoner
 	replace Sted = "Evenes" 	if strmatch(Sted, "Evenes*")
 	replace Sted = "Fauske"		if strmatch(Sted, "Fauske*")
+	replace Sted = "Finnmark"	if strmatch(Sted, "Finnmark*")
 	replace Sted = "Hamarøy"	if strmatch(Sted, "*Hamarøy")
 	replace Sted = "Hammerfest" if strmatch(Sted, "Hammerfest*")
 	replace Sted = "Harstad"	if strmatch(Sted, "Harstad*")
@@ -241,6 +264,7 @@ restore
 	replace Sted = "Storfjord"	if strmatch(Sted, "*Storfjord*")
 	replace Sted = "Tana"		if strmatch(Sted, "Deatnu*")
 	replace Sted = "Tjeldsund" 	if strmatch(Sted, "*Tjeldsund")
+	replace Sted = "Troms" 		if strmatch(Sted, "Troms *")
 	replace Sted = "Trondheim" 	if strmatch(Sted, "Trondheim*")
 	replace Sted = "Trøndelag" 	if strmatch(Sted, "Trøndelag*")
 
