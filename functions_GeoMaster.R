@@ -51,6 +51,7 @@ KnrHarmUpdate <- function(year = 2024,
     comb <- rbindlist(list(KnrHarm, kommunefylke))
     
     # Remove rows where GEO == GEO_omk (which doesn't make sense)
+    # Also removes rows where GEO = NA
     comb <- comb[GEO != GEO_omk]
     
     # Remove rows where GEO_omk reappears in GEO due to future recoding
