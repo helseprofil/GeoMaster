@@ -1,7 +1,12 @@
-# Install and load packages
-source("https://raw.githubusercontent.com/helseprofil/misc/main/utils.R")
-kh_load(RODBC, data.table, orgdata)
+library(RODBC)
+library(data.table)
+library(orgdata)
+library(collapse)
 
+# Update to use correct files, default = production files
+root <- "O:/Prosjekt/FHP/PRODUKSJON/STYRING"
+khelsa <- "KHELSA.mdb"
+geokoder <- "raw-khelse/geo-koder.accdb"
 # Functions used to update geo tables
 
 #' KnrHarmUpdate
@@ -172,15 +177,18 @@ GeoKoderUpdate <- function(year = 2024,
     
     # Connect to databases
     cat("\n Connecting to databases")
-    .KHELSA <- RODBC::odbcConnectAccess2007(paste0(basepath, khelsapath))
-    .GEOtables <- RODBC::odbcConnectAccess2007(paste0(basepath, geokoderpath))
+    .KHELSA <- RODBC::odbcConnectAccess2007(file.path(basepath, khelsapath))
+    .GEOtables <- RODBC::odbcConnectAccess2007(file.path(basepath, geokoderpath))
+    
+    on.exit(RODBC::odbcClose(.KHELSA), add = T)
+    on.exit(RODBC::odbcClose(.GEOtables), add =T)
     
     # Read and format original tables
     cat("\n Read, format, and combine original tables")
     GeoKoder <- addleading0(setDT(sqlQuery(.KHELSA, "SELECT * FROM GeoKoder WHERE GEOniv <> 'S'")))
     
     tblGeo <- addleading0(
-        setDT(sqlQuery(.GEOtables, paste0("SELECT [code], [name], [validTo], [level] FROM tblGeo WHERE validTo = '", year, "' AND level <> 'grunnkrets'")))
+        setDT(sqlQuery(.GEOtables, paste0("SELECT [code], [name], [validTo], [level] FROM tblGeo WHERE validTo = '", year, "' AND level NOT IN ('grunnkrets', 'okonomisk')")))
     )
     
     ## Change column names of tblGeo to comply with GeoKoder
@@ -192,19 +200,21 @@ GeoKoderUpdate <- function(year = 2024,
     ## Change GEOniv to F/K/B, add ID and TYP columns
     tblGeo[, `:=` (GEOniv = fcase(GEOniv == "fylke", "F",
                                   GEOniv == "kommune", "K",
-                                  GEOniv == "bydel", "B"),
+                                  GEOniv == "bydel", "B",
+                                  GEOniv == "levekaar", "V"),
                    ID = 1,
                    TYP = fcase(grepl("99$", GEO), "U",
                                default = "O"))]
     
     # Identify rows with expired GEO-codes, and set TIL = year - 1
     # Exception for 99, 9999, and 999999
-    GeoKoder[!GEO %in% c("99", "9999", "999999") & 
-                 !GEO %in% tblGeo$GEO & GEOniv %in% c("F", "K", "B") & TIL == 9999,
+    GeoKoder[(!grepl("99$", GEO) & !GEO %in% tblGeo$GEO & GEOniv %in% c("F", "K", "B") & TIL == 9999) | (GEOniv == "G" & TIL == 9999),
              TIL := year - 1]    
     
-    # Identify new rows from tblGeo, which must be added to GeoKoder
-    newrows <- tblGeo[!GEO %in% GeoKoder$GEO]
+    # Identify rows in tblGeo not existing in GeoKoder, based on GEOniv + GEO
+    geoexist <- GeoKoder[, .(GEOniv, GEO)][, let(exist = 1)]
+    newrows <- collapse::join(tblGeo, geoexist, on = c("GEOniv", "GEO"), how = "left")
+    newrows <- newrows[is.na(exist)][, let(exist = NULL)]
     
     ## Set FRA = validTo and TIL = 9999
     ## Change column order to comply with GeoKoder
@@ -272,9 +282,7 @@ GeoKoderUpdate <- function(year = 2024,
         }
     }
     
-    RODBC::odbcClose(.KHELSA)
-    RODBC::odbcClose(.GEOtables)
-    
+   
     return(out)
 }
 
