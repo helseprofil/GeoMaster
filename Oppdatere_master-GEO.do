@@ -62,6 +62,7 @@
 	  - IKKE OPPDATERT VS SSB (per 29.01.25). Kjører ut filer i hht. geo-koder.accdb/tblGeo slik den er per dato.
 	  Planen er å oppdatere vs. SSB etter publisering av 2025-profilene.
 	  MÅ RETTE i scriptet et par steder.
+	  LAGT INN filtrering av LKS og økonomiske soner fra tblGeo.
 		
 	*/
 
@@ -128,7 +129,7 @@ cd "O:\Prosjekt\FHP\Masterfiler/`profilaar'"
 	* MÅ RETTES i ODBC-Load-kommandoen nedenfor
 	************************************
 	
-odbc load, exec(`"SELECT t.code, t.name, t.validTo, t.level FROM tblGeo t WHERE t.validTo = '`MIDLprofilaar'' AND t.level <> 'grunnkrets' "') ///
+odbc load, exec(`"SELECT t.code, t.name, t.validTo, t.level FROM tblGeo t WHERE t.validTo = '`MIDLprofilaar'' AND t.level <> 'grunnkrets' AND t.level <> 'levekaar' AND t.level <> 'okonomisk' "') ///
 dsn("MS Access Database; DBQ=O:\Prosjekt\FHP\PRODUKSJON\STYRING\raw-khelse\geo-koder.accdb;")   clear
 rename (code name validTo level) (Sted_kode Sted Aar RegiontypeId)
 
