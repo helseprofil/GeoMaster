@@ -58,12 +58,16 @@
 	* For 2024:
 	  - Splitting av flere fylker, med nye fylkesnummer.
 	  - Derfor tatt utgangspunkt i oppdatert tblGeo fra orgdata-filen.
+	* For 2025: 
+	  - IKKE OPPDATERT VS SSB (per 29.01.25). Kjører ut filer i hht. geo-koder.accdb/tblGeo slik den er per dato.
+	  Planen er å oppdatere vs. SSB etter publisering av 2025-profilene.
+	  MÅ RETTE i scriptet et par steder.
 		
 	*/
 
 /*	
 Man må stå i rett mappe for å unngå feil. Bruk
-kommandoen cd "F:\Prosjekter\Kommunehelsa\Masterfiler\..(rett årstall).."
+kommandoen cd "O:\Prosjekt\FHP\Masterfiler\..(rett årstall).."
 */
 
 *===============================================================================
@@ -74,7 +78,7 @@ pause on
 clear frames
 
 *LEGG INN RETT ÅRSTALL!
-local profilaar "2024"
+local profilaar "2025"
 
 * KJØRING:
 ************************************************************************
@@ -84,13 +88,13 @@ local profilaar "2024"
 ************************************************************************
 local aarstalliFilbanen = real("`profilaar'") //`profilaar' 
 local innevaerendeAar = real(word("`c(current_date)'", 3))
-assert `aarstalliFilbanen'==`innevaerendeAar' + 1 
+*assert `aarstalliFilbanen'==`innevaerendeAar' + 1 
 
 local fjoraar  =  `profilaar'-1
 di `fjoraar'
 * Sikre at mappestrukturen eksisterer
-capture mkdir "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler/`profilaar'"
-cd "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler/`profilaar'"
+capture mkdir "O:\Prosjekt\FHP\Masterfiler/`profilaar'"
+cd "O:\Prosjekt\FHP\Masterfiler/`profilaar'"
 
 /*-------------------------------------------------
 *	Sjekking: Vs. navnelista for kommunene fra KLASS. Kommenter ut når sjekket.
@@ -118,14 +122,20 @@ cd "F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\Masterfiler/`profil
 	WHERE Fr.MODUS='F' "') ///
 	dsn("MS Access Database; DBQ=F:\Prosjekter\Kommunehelsa\PRODUKSJON\STYRING\KHELSA.mdb;")   clear */
 
-odbc load, exec(`"SELECT t.code, t.name, t.validTo, t.level FROM tblGeo t WHERE t.validTo = '`profilaar'' AND t.level <> 'grunnkrets' "') ///
-dsn("MS Access Database; DBQ=F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\PRODUKSJON\STYRING\raw-khelse\geo-koder.accdb;")   clear
+	************************************
+	* JAN-25: MIDLERTIDIG FRA 2024-GEO
+	local MIDLprofilaar = "2024"
+	* MÅ RETTES i ODBC-Load-kommandoen nedenfor
+	************************************
+	
+odbc load, exec(`"SELECT t.code, t.name, t.validTo, t.level FROM tblGeo t WHERE t.validTo = '`MIDLprofilaar'' AND t.level <> 'grunnkrets' "') ///
+dsn("MS Access Database; DBQ=O:\Prosjekt\FHP\PRODUKSJON\STYRING\raw-khelse\geo-koder.accdb;")   clear
 rename (code name validTo level) (Sted_kode Sted Aar RegiontypeId)
 
 frame create hreg
 frame change hreg
 odbc load, exec(`"SELECT * FROM GeoKoder G WHERE G.GEOniv = 'H' AND G.TIL = 9999 "') ///
-dsn("MS Access Database; DBQ=F:\Forskningsprosjekter\PDB 2455 - Helseprofiler og til_\PRODUKSJON\STYRING\KHELSA.mdb;")   clear
+dsn("MS Access Database; DBQ=O:\Prosjekt\FHP\PRODUKSJON\STYRING\KHELSA.mdb;")   clear
 
 frame change default
 
@@ -146,7 +156,7 @@ replace Sted = subinstr(Sted, " - ", " ",.)		// Ta bort bindestreker mellom spr�
 insobs 1, before(1)
 replace Sted_kode = "00" in 1
 replace Sted = "Hele landet" in 1
-replace Aar = "2024" in 1
+replace Aar = "`profilaar'" in 1
 
 replace RegiontypeId = strupper(RegiontypeId)
 order Sted_kode Aar Sted RegiontypeId
@@ -194,7 +204,7 @@ order Sted_kode Sted
 
 frame change default
 frameappend hreg			// Stata 17: brukte package frameappend from http://fmwww.bc.edu/RePEc/bocode/f.
-							// search i Help for frameappend, klikk lenke, "click here to install". Er tillatt på FHI.
+							// search i Help for frameappend, klikk lenke, "click here to install". Er tillatt på HDIR.
 
 * Lage numerisk GEO 
 destring Sted_kode, generate(geo)
@@ -244,6 +254,7 @@ replace Sted = "Eiganes og Våland kommunedel" if Sted_kode == "110303"
 	replace Sted = "Evenes" 	if strmatch(Sted, "Evenes*")
 	replace Sted = "Fauske"		if strmatch(Sted, "Fauske*")
 	replace Sted = "Finnmark"	if strmatch(Sted, "Finnmark*")
+	replace Sted = "Gratangen"	if strmatch(Sted, "Gratangen*")
 	replace Sted = "Hamarøy"	if strmatch(Sted, "*Hamarøy")
 	replace Sted = "Hammerfest" if strmatch(Sted, "Hammerfest*")
 	replace Sted = "Harstad"	if strmatch(Sted, "Harstad*")
@@ -252,16 +263,19 @@ replace Sted = "Eiganes og Våland kommunedel" if Sted_kode == "110303"
 	replace Sted = "Kautokeino" if strmatch(Sted, "Guovdage*")
 	replace Sted = "Kåfjord"	if strmatch(Sted, "G?ivuotna*")
 	replace Sted = "Lavangen"	if strmatch(Sted, "*Lavangen")
+	replace Sted = "Levanger"	if strmatch(Sted, "Levanger*")
 	replace Sted = "Namsos" 	if strmatch(Sted, "Namsos*")
 	replace Sted = "Nesseby"	if strmatch(Sted, "Unj?rga*")
 	replace Sted = "Nordland" 	if strmatch(Sted, "Nordland*")
 	replace Sted = "Nordreisa" 	if strmatch(Sted, "Nordreisa*")
 	replace Sted = "Porsanger"	if strmatch(Sted, "Porsanger*")
+	replace Sted = "Rana"		if strmatch(Sted, "Rana*")
 	replace Sted = "Røros"		if strmatch(Sted, "Røros*")
 	replace Sted = "Røyrvik"	if strmatch(Sted, "*Røyrvik")
 	replace Sted = "Snåsa"		if strmatch(Sted, "Snåase*")
 	replace Sted = "Sortland"	if strmatch(Sted, "Sortland*")
 	replace Sted = "Storfjord"	if strmatch(Sted, "*Storfjord*")
+	replace Sted = "Sørfold"	if strmatch(Sted, "Sørfold*")
 	replace Sted = "Tana"		if strmatch(Sted, "Deatnu*")
 	replace Sted = "Tjeldsund" 	if strmatch(Sted, "*Tjeldsund")
 	replace Sted = "Troms" 		if strmatch(Sted, "Troms *")
