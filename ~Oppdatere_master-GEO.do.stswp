@@ -126,7 +126,7 @@ cd "O:\Prosjekt\FHP\Masterfiler/`profilaar'"
 	************************************
 	* JAN-25: MIDLERTIDIG FRA 2024-GEO
 	*local MIDLprofilaar = "2024"
-	* MÅ RETTES i ODBC-Load-kommandoen nedenfor
+	* MÅ RETTES i ODBC-Load-kommandoen nedenfor: slett "MIDL" fra local-navnet.
 	************************************
 	
 odbc load, exec(`"SELECT t.code, t.name, t.validTo, t.level FROM tblGeo t WHERE t.validTo = '`profilaar'' AND t.level <> 'grunnkrets' AND t.level <> 'levekaar' AND t.level <> 'okonomisk' "') ///
